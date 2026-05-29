@@ -1,0 +1,23 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: phi-4-mini
+  namespace: super-slim-demo
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+  labels:
+    networking.kserve.io/visibility: exposed
+spec:
+  predictor:
+    model:
+      runtime: vllm-cpu-runtime
+      modelFormat:
+        name: vLLM
+      storageUri: oci://image-registry.openshift-image-registry.svc:5000/super-slim-demo/phi-4-mini-modelcar:latest
+      resources:
+        requests:
+          cpu: "4"
+          memory: 16Gi
+        limits:
+          cpu: "8"
+          memory: 24Gi

@@ -1,0 +1,55 @@
+# Istio uses a Secret named "cacerts" in istio-system to bootstrap its CA.
+# If this secret exists BEFORE the Istio CR is created, Istio will use it
+# instead of generating a self-signed CA.
+#
+# This is how customers bring their own CA for mesh mTLS certificates.
+# All sidecars will receive certs signed by this CA chain.
+#
+# For multi-cluster mesh federation, all clusters must share the same root CA.
+#
+# Required keys in the secret:
+#   ca-cert.pem    - The intermediate CA cert that Istio will use to sign workload certs
+#   ca-key.pem     - The private key for the intermediate CA
+#   root-cert.pem  - The root CA cert (trust anchor)
+#   cert-chain.pem - The full cert chain (intermediate + root)
+#
+# Generate example certs (DO NOT use in production):
+#
+#   # Create root CA
+#   openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
+#     -keyout root-key.pem -out root-cert.pem -days 3650 -nodes \
+#     -subj "/O=MyOrg/CN=Root CA"
+#
+#   # Create intermediate CA signed by root
+#   openssl req -newkey ec -pkeyopt ec_paramgen_curve:P-256 \
+#     -keyout ca-key.pem -out ca-csr.pem -nodes \
+#     -subj "/O=MyOrg/CN=Istio Intermediate CA"
+#   openssl x509 -req -in ca-csr.pem -CA root-cert.pem -CAkey root-key.pem \
+#     -CAcreateserial -out ca-cert.pem -days 1825 \
+#     -extfile <(printf "basicConstraints=CA:TRUE\nkeyUsage=critical,keyCertSign")
+#
+#   # Create cert chain
+#   cat ca-cert.pem root-cert.pem > cert-chain.pem
+#
+#   # Create the secret (must be created BEFORE the Istio CR)
+#   oc create secret generic cacerts -n istio-system \
+#     --from-file=ca-cert.pem \
+#     --from-file=ca-key.pem \
+#     --from-file=root-cert.pem \
+#     --from-file=cert-chain.pem
+#
+# IMPORTANT: This secret contains private key material.
+# Do NOT commit actual keys to the repo. Use SealedSecrets,
+# External Secrets Operator, or Vault in production.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: cacerts
+  namespace: istio-system
+type: Opaque
+data:
+  ca-cert.pem: REPLACE_WITH_BASE64_INTERMEDIATE_CA_CERT
+  ca-key.pem: REPLACE_WITH_BASE64_INTERMEDIATE_CA_KEY
+  root-cert.pem: REPLACE_WITH_BASE64_ROOT_CA_CERT
+  cert-chain.pem: REPLACE_WITH_BASE64_CERT_CHAIN

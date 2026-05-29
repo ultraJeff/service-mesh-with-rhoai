@@ -1,0 +1,25 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+metadata:
+  name: iris-onnx
+  namespace: super-slim-demo
+  annotations:
+    serving.kserve.io/deploymentMode: RawDeployment
+  labels:
+    networking.kserve.io/visibility: exposed
+    modelClass: mlserver_onnx.OnnxModel
+spec:
+  predictor:
+    model:
+      runtime: mlserver-runtime
+      modelFormat:
+        name: onnx
+        version: "1"
+      storageUri: oci://image-registry.openshift-image-registry.svc:5000/super-slim-demo/iris-onnx-modelcar:latest
+      resources:
+        requests:
+          cpu: "500m"
+          memory: 512Mi
+        limits:
+          cpu: "1"
+          memory: 1Gi

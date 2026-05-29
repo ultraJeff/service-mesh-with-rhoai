@@ -1,0 +1,42 @@
+apiVersion: serving.kserve.io/v1alpha1
+kind: ServingRuntime
+metadata:
+  name: mlserver-runtime
+  namespace: super-slim-demo
+  annotations:
+    openshift.io/display-name: MLServer ServingRuntime for KServe
+  labels:
+    opendatahub.io/dashboard: "true"
+spec:
+  annotations:
+    opendatahub.io/kserve-runtime: mlserver
+    prometheus.io/path: /metrics
+    prometheus.io/port: "8082"
+  containers:
+    - name: kserve-container
+      image: registry.redhat.io/rhoai/odh-mlserver-rhel9@sha256:d76bea18afe7b361847babb7a8ebc51fdbcd8164435f1bcb971e1701ba1bc595
+      env:
+        - name: MLSERVER_MODEL_IMPLEMENTATION
+          value: "{{.Labels.modelClass}}"
+        - name: MLSERVER_MODEL_NAME
+          value: "{{.Name}}"
+        - name: MLSERVER_MODEL_URI
+          value: /mnt/models
+        - name: MLSERVER_MODELS_DIR
+          value: /mnt/models
+        - name: MLSERVER_HTTP_PORT
+          value: "8080"
+      ports:
+        - containerPort: 8080
+          protocol: TCP
+  multiModel: false
+  supportedModelFormats:
+    - autoSelect: true
+      name: onnx
+      version: "1"
+    - name: sklearn
+      version: "1"
+    - name: xgboost
+      version: "2"
+    - name: lightgbm
+      version: "4"

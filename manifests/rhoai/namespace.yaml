@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: super-slim-demo
+  labels:
+    opendatahub.io/dashboard: "true"
+    istio-mesh: "true"
+    istio-injection: enabled
