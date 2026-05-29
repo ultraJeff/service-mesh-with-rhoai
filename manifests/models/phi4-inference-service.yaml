@@ -9,6 +9,8 @@ metadata:
     networking.kserve.io/visibility: exposed
 spec:
   predictor:
+    nodeSelector:
+      kubernetes.io/hostname: tallgeese
     model:
       runtime: vllm-cpu-runtime
       modelFormat:

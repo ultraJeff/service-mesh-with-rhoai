@@ -1,8 +1,12 @@
+# STRICT mTLS — all traffic to pods in this namespace must be mTLS.
+# This is possible because north-south traffic now enters through the
+# mesh gateway (which speaks mTLS to backends via ztunnel), eliminating
+# the plain-HTTP path from the RHOAI gateway.
 apiVersion: security.istio.io/v1
 kind: PeerAuthentication
 metadata:
   name: default
-  namespace: istio-system
+  namespace: super-slim-demo
 spec:
   mtls:
     mode: STRICT

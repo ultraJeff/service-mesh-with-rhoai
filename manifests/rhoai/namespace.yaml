@@ -4,5 +4,5 @@ metadata:
   name: super-slim-demo
   labels:
     opendatahub.io/dashboard: "true"
-    istio-mesh: "true"
-    istio-injection: enabled
+    istio.io/dataplane-mode: ambient
+    istio.io/use-waypoint: mesh-waypoint

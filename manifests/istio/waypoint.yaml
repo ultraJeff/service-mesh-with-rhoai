@@ -1,0 +1,16 @@
+# Waypoint proxy for L7 policy in the model serving namespace.
+# Ambient mesh provides L4 mTLS via ztunnel; the waypoint adds
+# L7 capabilities (AuthorizationPolicy, request routing, retries).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: mesh-waypoint
+  namespace: super-slim-demo
+  labels:
+    istio.io/waypoint-for: service
+spec:
+  gatewayClassName: istio-waypoint
+  listeners:
+    - name: mesh
+      port: 15008
+      protocol: HBONE
