@@ -20,6 +20,13 @@ function run(cmd) {
 
 app.get('/api/domain', (req, res) => { res.json({ domain: DOMAIN }); });
 
+app.get('/api/sno-status', async (req, res) => {
+  const nodes = await run('oc --context sno get nodes --no-headers 2>/dev/null');
+  const mesh = await run('oc --context sno get istio,istiocni,ztunnel -A --no-headers 2>/dev/null');
+  const pods = await run('oc --context sno get pods -n demo-app --no-headers 2>/dev/null | grep -v Completed | grep -v Terminating');
+  res.json({ nodes: nodes.output, mesh: mesh.output, pods: pods.output });
+});
+
 // --- Health & Status ---
 
 app.get('/api/health', async (req, res) => {

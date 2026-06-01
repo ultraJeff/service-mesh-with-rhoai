@@ -25,7 +25,7 @@ spec:
   commonName: "Mesh Root CA"
   subject:
     organizations:
-      - tallgeese.ultra.lab
+      - demo.mesh
   secretName: mesh-root-ca-secret
   privateKey:
     algorithm: ECDSA
@@ -55,7 +55,7 @@ spec:
   commonName: "Mesh Intermediate CA"
   subject:
     organizations:
-      - tallgeese.ultra.lab
+      - demo.mesh
   secretName: mesh-intermediate-ca-secret
   privateKey:
     algorithm: ECDSA

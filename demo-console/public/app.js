@@ -56,6 +56,27 @@ async function refreshStatus() {
     document.getElementById('status-nodes').innerHTML =
       `<span class="status-dot red"></span>API unreachable`;
   }
+
+  try {
+    const sno = await (await fetch('/api/sno-status')).json();
+    const snoNodes = sno.nodes.trim().split('\n').filter(l => l.trim());
+    const snoReady = snoNodes.every(l => l.includes('Ready'));
+    document.getElementById('status-sno-node').innerHTML =
+      `<span class="status-dot ${snoReady && snoNodes.length > 0 ? 'green' : 'red'}"></span>${snoNodes.length > 0 ? (snoReady ? 'Ready' : 'NOT READY') : 'Unreachable'}`;
+
+    const snoMeshLines = sno.mesh.trim().split('\n').filter(l => l.trim());
+    const snoMeshOk = snoMeshLines.length > 0 && snoMeshLines.every(l => l.includes('Healthy') || l.includes('True'));
+    document.getElementById('status-sno-mesh').innerHTML =
+      `<span class="status-dot ${snoMeshOk ? 'green' : snoMeshLines.length > 0 ? 'yellow' : 'red'}"></span>${snoMeshOk ? 'Healthy' : snoMeshLines.length > 0 ? 'Degraded' : 'No mesh'}`;
+
+    const snoPodLines = sno.pods.trim().split('\n').filter(l => l.trim());
+    const snoRunning = snoPodLines.filter(l => l.includes('Running')).length;
+    document.getElementById('status-sno-pods').innerHTML =
+      `<span class="status-dot ${snoRunning > 0 ? 'green' : 'red'}"></span>${snoRunning > 0 ? snoRunning + ' pods running' : 'No pods'}`;
+  } catch (e) {
+    document.getElementById('status-sno-node').innerHTML =
+      `<span class="status-dot red"></span>Unreachable`;
+  }
 }
 
 async function runInferAndShowLogs() {
