@@ -63,5 +63,15 @@ async function runInferAndShowLogs() {
   setTimeout(() => runAction('/api/ztunnel-logs', 'out-4b'), 2000);
 }
 
+async function loadDomain() {
+  try {
+    const res = await fetch('/api/domain');
+    const { domain } = await res.json();
+    document.getElementById('link-kiali').href = `https://kiali-istio-system.${domain}`;
+    document.getElementById('link-console').href = `https://console-openshift-console.${domain}/observe`;
+  } catch (e) {}
+}
+
+loadDomain();
 refreshStatus();
 setInterval(refreshStatus, 5000);

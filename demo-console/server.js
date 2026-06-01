@@ -5,6 +5,7 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 const TIMEOUT = 15000;
+let DOMAIN = 'apps.example.com';
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
@@ -16,6 +17,8 @@ function run(cmd) {
     });
   });
 }
+
+app.get('/api/domain', (req, res) => { res.json({ domain: DOMAIN }); });
 
 // --- Health & Status ---
 
@@ -137,7 +140,7 @@ echo 'You create this one secret. Istio handles everything else.'`);
 });
 
 app.get('/api/gateway-cert', async (req, res) => {
-  const result = await run('echo | openssl s_client -connect iris-onnx.apps.tallgeese.ultra.lab:443 -showcerts 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null');
+  const result = await run(`echo | openssl s_client -connect iris-onnx.${DOMAIN}:443 -showcerts 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null`);
   res.json(result);
 });
 
@@ -155,11 +158,11 @@ app.get('/api/httproutes', async (req, res) => {
 
 app.post('/api/infer', async (req, res) => {
   const result = await run(`echo '$ curl --cacert /tmp/mesh-root-ca.pem \\\\'
-echo '    https://iris-onnx.apps.tallgeese.ultra.lab/v2/models/iris-onnx/infer \\\\'
+echo '    https://iris-onnx.${DOMAIN}/v2/models/iris-onnx/infer \\\\'
 echo '    -H "Content-Type: application/json" \\\\'
 echo '    -d '"'"'{"inputs":[{"name":"input","shape":[1,4],"datatype":"FP32","data":[5.1,3.5,1.4,0.2]}]}'"'"''
 echo ''
-curl --cacert /tmp/mesh-root-ca.pem -s https://iris-onnx.apps.tallgeese.ultra.lab/v2/models/iris-onnx/infer -H 'Content-Type: application/json' -d '{"inputs":[{"name":"input","shape":[1,4],"datatype":"FP32","data":[5.1,3.5,1.4,0.2]}]}' 2>/dev/null | python3 -m json.tool`);
+curl --cacert /tmp/mesh-root-ca.pem -s https://iris-onnx.${DOMAIN}/v2/models/iris-onnx/infer -H 'Content-Type: application/json' -d '{"inputs":[{"name":"input","shape":[1,4],"datatype":"FP32","data":[5.1,3.5,1.4,0.2]}]}' 2>/dev/null | python3 -m json.tool`);
   res.json(result);
 });
 
@@ -242,7 +245,7 @@ app.post('/api/authz-policy/delete', async (req, res) => {
 });
 
 app.post('/api/test-external', async (req, res) => {
-  const result = await run("curl --cacert /tmp/mesh-root-ca.pem -s -o /dev/null -w '%{http_code}' --connect-timeout 5 https://iris-onnx.apps.tallgeese.ultra.lab/v2/models/iris-onnx 2>/dev/null");
+  const result = await run(`curl --cacert /tmp/mesh-root-ca.pem -s -o /dev/null -w '%{http_code}' --connect-timeout 5 https://iris-onnx.${DOMAIN}/v2/models/iris-onnx 2>/dev/null`);
   const code = result.output.trim();
   res.json({ output: `External (mesh gateway) → iris-onnx: HTTP ${code}`, exitCode: code === '200' ? 0 : 1 });
 });
@@ -260,6 +263,10 @@ app.get('/api/root-ca', async (req, res) => {
   res.json(result);
 });
 
-app.listen(PORT, () => {
-  console.log(`Demo console running at http://localhost:${PORT}`);
+exec("oc get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null", (err, stdout) => {
+  if (stdout && stdout.trim()) DOMAIN = stdout.trim().replace(/'/g, '');
+  console.log(`Cluster domain: ${DOMAIN}`);
+  app.listen(PORT, () => {
+    console.log(`Demo console running at http://localhost:${PORT}`);
+  });
 });
