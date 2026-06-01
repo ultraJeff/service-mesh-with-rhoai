@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
   <title>OSSM + RHOAI Demo Console</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -12,11 +13,51 @@
   <h1>OSSM v3 Ambient Mesh + RHOAI Demo</h1>
   <p>Interactive presenter console &mdash; click sections to expand, buttons to run live cluster commands</p>
 
-  <!-- Part 1 -->
+  <!-- Part 1: Hook -->
   <div class="section open">
     <div class="section-header" onclick="toggleSection(this)">
       <span class="section-number">1</span>
-      <span class="section-title">The Problem</span>
+      <span class="section-title">Let's Start with a Live Model</span>
+      <span class="section-time">2 min</span>
+    </div>
+    <div class="section-body">
+      <div class="talking-point">
+        Before we talk about architecture, let me show you something real.
+        This is a live ML model running on RHOAI. Watch what happens when I call it
+        &mdash; and pay attention to the <strong>certificate chain</strong>.
+      </div>
+
+      <div style="background:#1c2129; border-radius:6px; padding:14px; margin-bottom:14px; font-size:12px; line-height:1.7; font-family:'SF Mono','Fira Code',monospace;">
+        <strong style="color:#58a6ff;">Traffic path:</strong><br>
+        <span style="color:#8b949e;">curl</span> &rarr;
+        <span style="color:#c9d1d9;">OCP Router</span> <span style="color:#8b949e;">(passthrough, SNI routing)</span> &rarr;<br>
+        <span style="color:#3fb950;">Mesh Gateway</span> <span style="color:#8b949e;">(terminates TLS with custom CA leaf cert)</span> &rarr;<br>
+        <span style="color:#3fb950;">ztunnel &harr; ztunnel</span> <span style="color:#8b949e;">(HBONE mTLS, port 15008, SPIFFE identity)</span> &rarr;<br>
+        <span style="color:#c9d1d9;">Model pod</span> <span style="color:#8b949e;">(app receives plain HTTP inside its own netns &mdash; never crosses the network unencrypted)</span>
+      </div>
+      <div class="action-group">
+        <div class="action-group-label">What's running in this pod? (enable-auth + mesh, simultaneously)</div>
+        <button class="btn" onclick="runAction('/api/pod-containers', 'out-1c')">Show Pod Containers</button>
+      </div>
+      <pre class="output" id="out-1c"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Call the model through the mesh gateway</div>
+        <button class="btn primary" onclick="runInferAndShowLogs()">Run Inference</button>
+      </div>
+      <pre class="output" id="out-1a"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Every connection is mutually authenticated (SPIFFE identities)</div>
+        <button class="btn" onclick="runAction('/api/ztunnel-logs', 'out-1b')">Refresh mTLS proof</button>
+      </div>
+      <pre class="output" id="out-1b"></pre>
+    </div>
+  </div>
+
+  <!-- Part 2: The Why -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="section-number">2</span>
+      <span class="section-title">Why Does This Matter?</span>
       <span class="section-time">2 min</span>
     </div>
     <div class="section-body">
@@ -42,160 +83,193 @@
     </div>
   </div>
 
-  <!-- Part 2 -->
-  <div class="section">
-    <div class="section-header" onclick="toggleSection(this)">
-      <span class="section-number">2</span>
-      <span class="section-title">The Solution &mdash; Ambient Mesh</span>
-      <span class="section-time">3 min</span>
-    </div>
-    <div class="section-body">
-      <div class="talking-point">
-        We layer OSSM v3 ambient mesh on top. <strong>No application changes</strong> &mdash; ztunnel transparently
-        intercepts traffic and encrypts it with mTLS. Zero sidecars. Apps serve plain HTTP; the mesh handles encryption.
-      </div>
-      <div class="action-group">
-        <div class="action-group-label">What we added</div>
-        <button class="btn" onclick="runAction('/api/istio-crs', 'out-2a')">Istio CRs (RHOAI vs Ours)</button>
-        <button class="btn" onclick="runAction('/api/ztunnel-pods', 'out-2a')">ztunnel + CNI Pods</button>
-        <button class="btn" onclick="runAction('/api/namespace-labels', 'out-2a')">Namespace Enrollment Labels</button>
-      </div>
-      <pre class="output" id="out-2a"></pre>
-    </div>
-  </div>
-
-  <!-- Part 3 -->
+  <!-- Part 3: How It Works -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
       <span class="section-number">3</span>
-      <span class="section-title">Custom CA &mdash; Customer-Controlled Trust</span>
+      <span class="section-title">How It Works &mdash; Ambient Mesh</span>
       <span class="section-time">3 min</span>
     </div>
     <div class="section-body">
       <div class="talking-point">
-        All mesh certificates chain to a <strong>customer-provided root CA</strong>.
-        The gateway cert, the workload SPIFFE certs &mdash; everything.
-        One trust anchor you control. cert-manager handles the full lifecycle.
+        OSSM v3 ambient mode. <strong>No sidecars, no app changes.</strong>
+        ztunnel runs per-node and transparently intercepts all pod traffic.
+        Apps serve plain HTTP internally &mdash; but nothing crosses the network unencrypted.
+        Enrollment is two namespace labels.
+      </div>
+
+      <div style="background:#1c2129; border-radius:6px; padding:14px; margin-bottom:14px; font-size:12px; line-height:1.8; font-family:'SF Mono','Fira Code',monospace;">
+        <strong style="color:#58a6ff;">Where is traffic encrypted?</strong><br><br>
+        <span style="color:#3fb950;">Pod A (node 1)</span><br>
+        &nbsp;&nbsp;app &rarr; <span style="color:#8b949e;">plain HTTP</span> &rarr; ztunnel <span style="color:#8b949e;">(same network namespace, never leaves the pod)</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&darr;<br>
+        <span style="color:#3fb950;">&nbsp;&nbsp;===== HBONE mTLS on port 15008 (encrypted on the wire) =====</span><br>
+        &nbsp;&nbsp;&nbsp;&nbsp;&darr;<br>
+        <span style="color:#3fb950;">Pod B (node 2)</span><br>
+        &nbsp;&nbsp;ztunnel &rarr; <span style="color:#8b949e;">plain HTTP</span> &rarr; app <span style="color:#8b949e;">(same network namespace, never left the pod)</span><br><br>
+        <span style="color:#d29922;">The &ldquo;plain HTTP&rdquo; only exists between ztunnel and the app inside the same pod &mdash;<br>
+        like two processes on localhost. All pod-to-pod traffic is mTLS.</span><br><br>
+        <strong style="color:#58a6ff;">Can we encrypt further?</strong><br>
+        <table style="width:100%; margin-top:6px; font-size:11px; border-collapse:collapse; font-family:-apple-system,sans-serif;">
+          <tr style="color:#8b949e;"><td style="padding:3px 6px;">Layer</td><td style="padding:3px 6px;">What</td><td style="padding:3px 6px;">Covers</td></tr>
+          <tr><td style="padding:3px 6px; color:#3fb950;">ztunnel mTLS</td><td style="padding:3px 6px;">Pod-to-pod on the wire</td><td style="padding:3px 6px;">Automatic, no app changes</td></tr>
+          <tr><td style="padding:3px 6px; color:#3fb950;">enable-auth</td><td style="padding:3px 6px;">kube-rbac-proxy inside pod</td><td style="padding:3px 6px;">OAuth token validation + TLS</td></tr>
+          <tr><td style="padding:3px 6px; color:#3fb950;">App-level TLS</td><td style="padding:3px 6px;">Model runtime (--ssl-certfile)</td><td style="padding:3px 6px;">Last inch inside the pod</td></tr>
+        </table>
+        <span style="color:#8b949e; font-family:-apple-system,sans-serif; font-size:11px;"><br>Each layer is additive. The intra-pod segment is between processes in the same<br>
+        network namespace. An attacker there has root on the pod &mdash; that&rsquo;s a runtime<br>
+        security boundary (Falco, ACS), not a network security boundary.</span>
       </div>
       <div class="action-group">
-        <div class="action-group-label">How it's configured</div>
-        <button class="btn primary" onclick="runAction('/api/cert-how', 'out-3a')">Show CA Chain Architecture</button>
-        <button class="btn" onclick="runAction('/api/cert-status', 'out-3a')">cert-manager Certificates (live)</button>
+        <div class="action-group-label">Mesh infrastructure</div>
+        <button class="btn" onclick="runAction('/api/istio-crs', 'out-3a')">Istio CRs (RHOAI vs Ours)</button>
+        <button class="btn" onclick="runAction('/api/ztunnel-pods', 'out-3a')">ztunnel Pods (one per node)</button>
       </div>
       <pre class="output" id="out-3a"></pre>
       <div class="action-group">
-        <div class="action-group-label">Where do certs go?</div>
-        <button class="btn primary" onclick="runAction('/api/cacerts-secret', 'out-3b')">Show cacerts Secret (the integration point)</button>
+        <div class="action-group-label">How does ztunnel intercept traffic?</div>
+        <button class="btn" onclick="runAction('/api/iptables-rules', 'out-3b')">Show iptables Rules (inside model pod)</button>
       </div>
       <pre class="output" id="out-3b"></pre>
       <div class="action-group">
-        <div class="action-group-label">Verify it's working</div>
-        <button class="btn" onclick="runAction('/api/cacerts-verify', 'out-3c')">Verify Istio CA Root</button>
-        <button class="btn" onclick="runAction('/api/gateway-cert', 'out-3c')">Gateway Cert Chain</button>
+        <div class="action-group-label">Enrollment = two labels</div>
+        <button class="btn primary" onclick="runAction('/api/namespace-labels', 'out-3c')">Show Namespace Labels</button>
       </div>
       <pre class="output" id="out-3c"></pre>
     </div>
   </div>
 
-  <!-- Part 4 -->
+  <!-- Part 4: Custom CA -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
       <span class="section-number">4</span>
-      <span class="section-title">Mesh Gateway &mdash; Encrypted North-South</span>
+      <span class="section-title">Customer-Controlled Certificates</span>
       <span class="section-time">3 min</span>
     </div>
     <div class="section-body">
       <div class="talking-point">
-        External traffic enters through our <strong>mesh gateway</strong>, not a direct Route.
-        The gateway terminates TLS with the custom CA cert, then speaks mTLS to backends via ztunnel.
-        <strong>Every hop encrypted.</strong>
+        All mesh certificates &mdash; the gateway cert, every workload SPIFFE identity &mdash;
+        chain to a <strong>single customer-controlled root CA</strong>.
+        cert-manager handles the full lifecycle. In production, you swap the root with your corporate PKI.
       </div>
       <div class="action-group">
-        <div class="action-group-label">Send traffic through the mesh gateway</div>
-        <button class="btn primary" onclick="runInferAndShowLogs()">Run Inference (through gateway)</button>
+        <div class="action-group-label">How it's configured</div>
+        <button class="btn primary" onclick="runAction('/api/cert-how', 'out-4a')">Show CA Chain Architecture</button>
+        <button class="btn" onclick="runAction('/api/cert-status', 'out-4a')">cert-manager Certificates (live)</button>
       </div>
       <pre class="output" id="out-4a"></pre>
       <div class="action-group">
-        <div class="action-group-label">mTLS proof — both sides present SPIFFE identity certificates</div>
-        <button class="btn" onclick="runAction('/api/ztunnel-logs', 'out-4b')">Refresh ztunnel logs</button>
+        <div class="action-group-label">Where do certs go?</div>
+        <button class="btn primary" onclick="runAction('/api/cacerts-secret', 'out-4b')">Show cacerts Secret (the integration point)</button>
       </div>
       <pre class="output" id="out-4b"></pre>
       <div class="action-group">
-        <div class="action-group-label">What happens without the gateway? (direct curl, no mesh identity)</div>
-        <button class="btn danger" onclick="runAction('/api/test-bypass', 'out-4c', 'POST')">Try Direct Access (bypasses gateway)</button>
+        <div class="action-group-label">Verify the chain is connected (live)</div>
+        <button class="btn" onclick="runAction('/api/cacerts-verify', 'out-4c')">Verify Full Cert Chain</button>
       </div>
       <pre class="output" id="out-4c"></pre>
+      <div class="action-group">
+        <div class="action-group-label">SPIFFE workload identities (auto-assigned by istiod)</div>
+        <button class="btn primary" onclick="runAction('/api/spiffe-identities', 'out-4d')">Show SPIFFE Identities</button>
+      </div>
+      <pre class="output" id="out-4d"></pre>
+
+      <div style="background:#1c2129; border-left:3px solid #d29922; border-radius:0 6px 6px 0; padding:12px 14px; margin-top:16px; font-size:12px; line-height:1.7;">
+        <strong style="color:#d29922;">Going further: Zero Trust Workload Identity Manager</strong><br><br>
+        <span style="color:#c9d1d9;">Currently, istiod is the CA that signs these SPIFFE identities from the
+        <code>cacerts</code> secret. For organizations that need centralized identity governance,
+        hardware-based attestation, or cross-cloud federation, istiod can be configured to
+        delegate identity issuance to a <strong>SPIRE server</strong>.</span><br><br>
+        <span style="color:#c9d1d9;">Red Hat's
+        <a href="https://www.redhat.com/en/technologies/cloud-computing/openshift/zero-trust-workload-identity-manager" target="_blank" style="color:#58a6ff;">Zero Trust Workload Identity Manager</a>
+        provides this as a managed operator:</span><br>
+        <span style="color:#8b949e; font-family:'SF Mono','Fira Code',monospace; font-size:11px;"><br>
+        &nbsp;&nbsp;Current:&nbsp;&nbsp;&nbsp;cacerts secret &rarr; istiod (built-in CA) &rarr; SPIFFE certs<br>
+        &nbsp;&nbsp;With ZTWIM: SPIRE server &rarr; istiod (as agent) &rarr; SPIFFE certs<br><br></span>
+        <span style="color:#c9d1d9;">Same SPIFFE format, same ztunnel mTLS &mdash; but adds hardware root of trust,
+        cross-cloud federation, and centralized identity governance.</span>
+      </div>
     </div>
   </div>
 
-  <!-- Part 5 -->
+  <!-- Part 5: Zero Trust Proof -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
       <span class="section-number">5</span>
-      <span class="section-title">Traffic Management &mdash; L7 Policy</span>
-      <span class="section-time">3 min</span>
+      <span class="section-title">Zero Trust &mdash; Prove It</span>
+      <span class="section-time">2 min</span>
     </div>
     <div class="section-body">
       <div class="talking-point">
-        Ztunnel handles L4 mTLS for free. For L7 policies &mdash; authorization, retries, timeouts &mdash;
-        the <strong>waypoint proxy</strong> adds Envoy-powered policy enforcement.
-        Watch: we restrict the model to only accept traffic from the mesh gateway.
-        The notebook gets a <strong>403 Forbidden</strong>.
+        STRICT mTLS means plain HTTP is rejected. If you're not in the mesh,
+        you can't reach the model. Watch what happens when we try to bypass the gateway.
       </div>
       <div class="action-group">
-        <div class="action-group-label">Step 1: Baseline (both paths work)</div>
-        <button class="btn primary" onclick="runAction('/api/test-external', 'out-5a', 'POST')">Test External &rarr; Iris</button>
-        <button class="btn primary" onclick="runAction('/api/test-pod-to-pod', 'out-5a', 'POST')">Test Notebook &rarr; Iris</button>
+        <div class="action-group-label">Through the mesh gateway with custom CA trust</div>
+        <button class="btn success" onclick="runAction('/api/test-external', 'out-5a', 'POST')">Test via Gateway (with CA cert)</button>
       </div>
       <pre class="output" id="out-5a"></pre>
       <div class="action-group">
-        <div class="action-group-label">Step 2: Apply AuthorizationPolicy</div>
-        <button class="btn success" onclick="runAction('/api/authz-policy/apply', 'out-5b', 'POST')">Apply Policy</button>
-        <button class="btn danger" onclick="runAction('/api/authz-policy/delete', 'out-5b', 'POST')">Remove Policy</button>
+        <div class="action-group-label">Without trusting the custom CA</div>
+        <button class="btn" onclick="runAction('/api/test-no-cert', 'out-5b', 'POST')">Test Without CA Cert</button>
       </div>
       <pre class="output" id="out-5b"></pre>
       <div class="action-group">
-        <div class="action-group-label">Step 3: Test with policy (gateway allowed, notebook denied)</div>
-        <button class="btn primary" onclick="runAction('/api/test-external', 'out-5c', 'POST')">Test External &rarr; Iris</button>
-        <button class="btn primary" onclick="runAction('/api/test-pod-to-pod', 'out-5c', 'POST')">Test Notebook &rarr; Iris</button>
+        <div class="action-group-label">Bypass the gateway entirely (no SPIFFE identity)</div>
+        <button class="btn danger" onclick="runAction('/api/test-bypass', 'out-5c', 'POST')">Try Direct Access</button>
       </div>
       <pre class="output" id="out-5c"></pre>
     </div>
   </div>
 
-  <!-- Part 6 -->
+  <!-- Part 6: Authorization Policy -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
       <span class="section-number">6</span>
-      <span class="section-title">Observability</span>
+      <span class="section-title">L7 Authorization &mdash; Who Can Call the Model?</span>
+      <span class="section-time">3 min</span>
+    </div>
+    <div class="section-body">
+      <div class="talking-point">
+        Beyond encryption: <strong>authorization policy</strong>.
+        What if a compromised pod tries to call the model endpoint directly?
+        The waypoint proxy enforces L7 rules based on SPIFFE identity.
+        Watch: we restrict the model to gateway-only access. Other pods get <strong>403 Forbidden</strong>.
+      </div>
+      <div class="action-group">
+        <div class="action-group-label">Step 1: Baseline &mdash; both paths work</div>
+        <button class="btn primary" onclick="runAction('/api/test-external', 'out-6a', 'POST')">External &rarr; Iris</button>
+        <button class="btn primary" onclick="runAction('/api/test-pod-to-pod', 'out-6a', 'POST')">Test Client &rarr; Iris</button>
+      </div>
+      <pre class="output" id="out-6a"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Step 2: Apply policy</div>
+        <button class="btn success" onclick="runAction('/api/authz-policy/apply', 'out-6b', 'POST')">Apply AuthorizationPolicy</button>
+        <button class="btn danger" onclick="runAction('/api/authz-policy/delete', 'out-6b', 'POST')">Remove Policy</button>
+      </div>
+      <pre class="output" id="out-6b"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Step 3: Test again &mdash; gateway still works, test client blocked</div>
+        <button class="btn primary" onclick="runAction('/api/test-external', 'out-6c', 'POST')">External &rarr; Iris</button>
+        <button class="btn primary" onclick="runAction('/api/test-pod-to-pod', 'out-6c', 'POST')">Test Client &rarr; Iris</button>
+      </div>
+      <pre class="output" id="out-6c"></pre>
+    </div>
+  </div>
+
+  <!-- Part 7: Multi-Cluster -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="section-number">7</span>
+      <span class="section-title">Multi-Cluster Trust</span>
       <span class="section-time">2 min</span>
     </div>
     <div class="section-body">
       <div class="talking-point">
-        Kiali provides the mesh topology view. See traffic flow, mTLS status, and trace requests end-to-end.
-      </div>
-      <div class="action-group">
-        <div class="action-group-label">Open in browser</div>
-        <a class="link-btn" id="link-kiali" href="#" target="_blank">Kiali Dashboard</a>
-        <a class="link-btn" id="link-console" href="#" target="_blank">OCP Console</a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Part 7 -->
-  <div class="section">
-    <div class="section-header" onclick="toggleSection(this)">
-      <span class="section-number">7</span>
-      <span class="section-title">Multi-Cluster Preview</span>
-      <span class="section-time">1 min</span>
-    </div>
-    <div class="section-body">
-      <div class="talking-point">
-        Both clusters share the <strong>same root CA</strong> but have their own intermediate CAs.
-        Any workload on either cluster can verify the other's SPIFFE identity
-        because they chain to the same trust anchor. This is the foundation for
-        cross-cluster mTLS &mdash; when east-west gateways are added, traffic flows
-        securely between clusters without per-cluster trust configuration.
+        Two clusters, two meshes, <strong>one root CA</strong>.
+        Each cluster has its own intermediate CA for workload certs,
+        but they chain to the same trust anchor. Cross-cluster mTLS
+        is a configuration change, not a rebuild.
       </div>
       <div class="action-group">
         <div class="action-group-label">Prove shared trust</div>
@@ -203,13 +277,18 @@
         <button class="btn" onclick="runAction('/api/multi-cluster-certs', 'out-7a')">Compare Gateway Cert Chains</button>
       </div>
       <pre class="output" id="out-7a"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Observability</div>
+        <a class="link-btn" id="link-kiali" href="#" target="_blank">Kiali Dashboard</a>
+        <a class="link-btn" id="link-console" href="#" target="_blank">OCP Console</a>
+      </div>
     </div>
   </div>
 
 </div>
 
 <div id="sidebar">
-  <h2>Cluster Status</h2>
+  <h2>RHOAI Cluster</h2>
 
   <div class="status-card">
     <h3>Nodes</h3>

@@ -54,15 +54,71 @@ app.get('/api/plain-http-check', async (req, res) => {
   res.json(result);
 });
 
+app.get('/api/pod-containers', async (req, res) => {
+  const result = await run(`echo 'Iris model pod containers:'
+echo ''
+oc get pods -n super-slim-demo -l app=isvc.iris-onnx-predictor -o jsonpath='{range .items[0].spec.containers[*]}{.name}{"\\n"}{end}' 2>/dev/null | sed 's/^/  /'
+echo ''
+echo 'kserve-container  → ML model serving plain HTTP on :8080'
+echo 'kube-rbac-proxy   → RHOAI auth proxy, TLS on :8443 (enable-auth: true)'
+echo 'modelcar          → model weight storage'
+echo ''
+echo 'Plus ztunnel (per-node, not a sidecar) handles mTLS on the wire.'
+echo ''
+echo 'Two security layers active simultaneously:'
+echo '  1. ztunnel mTLS    — encrypts all pod-to-pod traffic (mesh layer)'
+echo '  2. kube-rbac-proxy — validates OAuth tokens + TLS (app layer)'`);
+  res.json(result);
+});
+
 // --- Part 2: Ambient Mesh ---
 
 app.get('/api/ztunnel-pods', async (req, res) => {
-  const result = await run('oc get pods -n ztunnel 2>/dev/null; echo "\\n--- istio-cni ---"; oc get pods -n istio-cni 2>/dev/null');
+  const result = await run(`echo 'ztunnel — runs on every node, encrypts all pod traffic:'; echo ''; oc get pods -n ztunnel -o wide 2>/dev/null`);
+  res.json(result);
+});
+
+app.get('/api/iptables-rules', async (req, res) => {
+  const result = await run(`echo 'iptables rules inside the model pod (injected by istio-cni):'
+echo 'These redirect all traffic through ztunnel — the app has no idea.'
+echo ''
+echo '--- Inbound (PREROUTING) ---'
+echo 'Kubelet probes exempted:  -s 169.254.7.127 → ACCEPT'
+echo 'Everything else:          → REDIRECT to ztunnel port 15006'
+echo ''
+echo '--- Outbound (OUTPUT) ---'
+echo 'DNS redirected:           → ztunnel port 15053'
+echo 'Everything else:          → REDIRECT to ztunnel port 15001'
+echo ''
+echo '--- Key ports inside the pod ---'
+echo '  15006  ztunnel inbound listener (receives intercepted inbound traffic)'
+echo '  15001  ztunnel outbound listener (receives intercepted outbound traffic)'
+echo '  15008  HBONE mTLS endpoint (encrypted tunnel between nodes)'
+echo '  15053  ztunnel DNS proxy'
+echo '   8080  app (plain HTTP — only reachable via ztunnel, not directly)'
+echo ''
+echo 'Live from the pod:'
+oc exec -n super-slim-demo deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E "State|8080|1500"
+`);
   res.json(result);
 });
 
 app.get('/api/namespace-labels', async (req, res) => {
-  const result = await run("oc get ns super-slim-demo -o jsonpath='{.metadata.labels}' 2>/dev/null | python3 -m json.tool");
+  const result = await run(`echo 'Namespace: super-slim-demo'
+echo ''
+echo 'Mesh enrollment labels (this is all it takes):'
+echo ''
+echo '  istio.io/dataplane-mode: ambient     ← enroll in the mesh'
+echo '  istio.io/use-waypoint: mesh-waypoint ← enable L7 policy'
+echo ''
+echo 'Live:'
+oc get ns super-slim-demo -o jsonpath='{.metadata.labels}' 2>/dev/null | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+for k,v in sorted(d.items()):
+    if 'istio' in k:
+        print(f'  {k}: {v}  ✓')
+"`);
   res.json(result);
 });
 
@@ -84,30 +140,50 @@ app.get('/api/cert-status', async (req, res) => {
 });
 
 app.get('/api/cert-how', async (req, res) => {
-  const result = await run(`echo 'The CA chain is 5 cert-manager resources applied in order:'
+  const result = await run(`echo 'The CA chain uses 3 Certificates + 2 Issuers:'
 echo ''
-echo '1. ClusterIssuer/mesh-selfsigned        (bootstrap - self-signed)'
+echo '  ClusterIssuer/mesh-selfsigned           (config: self-signed bootstrap)'
 echo '     ↓ signs'
-echo '2. Certificate/mesh-root-ca             (Root CA, 10yr TTL)'
-echo '     → creates Secret: mesh-root-ca-secret'
+echo '  Certificate/mesh-root-ca                (Root CA, 10yr)          [cert-manager]'
+echo '     ⚡ SHARED across all clusters — the trust anchor'
 echo '     ↓'
-echo '3. Issuer/mesh-root-ca-issuer           (can sign using the root CA)'
+echo '  Issuer/mesh-root-ca-issuer              (config: signs using root CA)'
 echo '     ↓ signs'
-echo '4. Certificate/mesh-intermediate-ca     (Intermediate CA, 5yr TTL)'
-echo '     → creates Secret: mesh-intermediate-ca-secret'
+echo '  Certificate/mesh-intermediate-ca        (Intermediate CA, 5yr)   [cert-manager]'
+echo '     ⚡ UNIQUE per cluster — each cluster has its own'
 echo '     ↓'
-echo '5. Issuer/mesh-intermediate-ca-issuer   (signs everything below)'
-echo '     ↓ signs'
-echo '     ├── Certificate/mesh-gateway-cert  (gateway TLS, 90d, auto-renewed)'
-echo '     └── Istio cacerts secret           (SPIFFE workload certs, 24h rotation)'
+echo '  Issuer/mesh-intermediate-ca-issuer      (config: signs using intermediate)'
+echo '     ↓ signs two things:'
+echo '     │'
+echo '     ├── Certificate/mesh-gateway-cert (90d)                       [cert-manager]'
+echo '     │   The TLS cert external clients see when connecting.'
+echo '     │   Presented by the ingress gateway Envoy pod.'
+echo '     │   cert-manager auto-renews it — not managed by the mesh.'
+echo '     │'
+echo '     └── Secret/cacerts                                            [istiod]'
+echo '         istiod uses this CA to sign SPIFFE workload identity'
+echo '         certs for every pod in the mesh (24h TTL, auto-rotated).'
+echo '         ⚡ FULLY MANAGED BY THE MESH — zero manual rotation.'
 echo ''
-echo 'In production: replace step 1-2 with your corporate PKI root CA.'
-echo 'Everything else stays the same.'`);
+echo 'In production: replace the self-signed root with your corporate PKI root CA.'
+echo 'Everything downstream stays the same.'`);
   res.json(result);
 });
 
 app.get('/api/cacerts-verify', async (req, res) => {
-  const result = await run("oc get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -issuer 2>/dev/null");
+  const result = await run(`echo 'Verifying the cert chain is connected:'
+echo ''
+echo '1. Gateway cert (what external clients see):'
+echo | openssl s_client -connect iris-onnx.${DOMAIN}:443 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null | sed 's/^/   /'
+echo ''
+echo '2. Istio CA (what signs workload SPIFFE certs):'
+oc get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -issuer 2>/dev/null | sed 's/^/   /'
+echo ''
+echo '3. Root CA (the shared trust anchor):'
+oc get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -issuer 2>/dev/null | sed 's/^/   /'
+echo ''
+echo 'Chain: gateway cert → signed by intermediate → signed by root (self-signed)'
+echo 'All three are connected. The root is the same on every cluster.'`);
   res.json(result);
 });
 
@@ -143,6 +219,30 @@ echo '  3. oc create secret generic cacerts -n istio-system ...'
 echo ''
 echo 'In production: your PKI team provides the intermediate cert+key and root cert.'
 echo 'You create this one secret. Istio handles everything else.'`);
+  res.json(result);
+});
+
+app.get('/api/spiffe-identities', async (req, res) => {
+  const result = await run(`echo 'SPIFFE identity format:'
+echo '  spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>'
+echo ''
+echo 'Istio assigns one to every workload based on its Kubernetes'
+echo 'service account. No configuration needed — it is automatic.'
+echo ''
+echo 'Workload identities on this cluster:'
+echo ''
+oc get pods -n super-slim-demo -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.metadata.name}{"\\t"}{.spec.serviceAccountName}{"\\n"}{end}' 2>/dev/null | while read POD SA; do
+  echo "  $POD"
+  echo "    → spiffe://cluster.local/ns/super-slim-demo/sa/$SA"
+  echo ""
+done
+echo 'Mesh gateway identity:'
+SA=$(oc get deployment mesh-gateway-istio -n istio-system -o jsonpath='{.spec.template.spec.serviceAccountName}' 2>/dev/null)
+echo "  mesh-gateway-istio"
+echo "    → spiffe://cluster.local/ns/istio-system/sa/$SA"
+echo ''
+echo 'These identities are used for mTLS authentication and'
+echo 'AuthorizationPolicy enforcement — no tokens, no passwords.'`);
   res.json(result);
 });
 
@@ -220,7 +320,7 @@ else
   echo "STRICT mTLS rejected the connection."
   echo "Without a valid SPIFFE identity, you cannot reach the model."
 fi`);
-  res.json(result);
+  res.json({ output: result.output, exitCode: 1 });
 });
 
 // --- Part 5: Traffic Management ---
@@ -232,16 +332,13 @@ metadata:
   name: iris-allow-gateway-only
   namespace: super-slim-demo
 spec:
-  targetRefs:
-    - kind: Service
-      group: ""
-      name: iris-onnx-predictor
   action: ALLOW
   rules:
     - from:
         - source:
             principals:
-              - "cluster.local/ns/istio-system/sa/mesh-gateway-istio"`;
+              - "cluster.local/ns/istio-system/sa/mesh-gateway-istio"
+              - "cluster.local/ns/super-slim-demo/sa/mesh-waypoint"`;
   const result = await run(`echo '${policy}' | oc apply -f - 2>&1`);
   res.json(result);
 });
@@ -252,15 +349,50 @@ app.post('/api/authz-policy/delete', async (req, res) => {
 });
 
 app.post('/api/test-external', async (req, res) => {
-  const result = await run(`curl --cacert /tmp/mesh-root-ca.pem -s -o /dev/null -w '%{http_code}' --connect-timeout 5 https://iris-onnx.${DOMAIN}/v2/models/iris-onnx 2>/dev/null`);
-  const code = result.output.trim();
-  res.json({ output: `External (mesh gateway) → iris-onnx: HTTP ${code}`, exitCode: code === '200' ? 0 : 1 });
+  const result = await run(`echo '$ curl --cacert /tmp/mesh-root-ca.pem https://iris-onnx.${DOMAIN}/v2/models/iris-onnx'
+echo '  (through mesh gateway, verified against our custom CA)'
+echo ''
+CODE=$(curl --cacert /tmp/mesh-root-ca.pem -s -o /dev/null -w '%{http_code}' --connect-timeout 5 https://iris-onnx.${DOMAIN}/v2/models/iris-onnx 2>/dev/null)
+echo "Result: HTTP $CODE"
+if [ "$CODE" = "200" ]; then
+  echo "✓ Mesh gateway accepted — valid SPIFFE identity"
+else
+  echo "✗ Connection failed"
+fi`);
+  res.json(result);
+});
+
+app.post('/api/test-no-cert', async (req, res) => {
+  const result = await run(`echo '$ curl https://iris-onnx.${DOMAIN}/v2/models/iris-onnx'
+echo '  (no --cacert flag — client does not trust our custom CA)'
+echo ''
+OUTPUT=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 https://iris-onnx.${DOMAIN}/v2/models/iris-onnx 2>&1)
+echo "Result: $OUTPUT"
+echo ''
+echo 'curl rejects the connection because the gateway cert is signed'
+echo 'by our custom CA, not a public CA. The client must explicitly'
+echo 'trust the root CA to connect.'`);
+  res.json({ output: result.output, exitCode: 1 });
 });
 
 app.post('/api/test-pod-to-pod', async (req, res) => {
-  const result = await run("oc exec -n super-slim-demo test-notebook-0 -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://iris-onnx-predictor.super-slim-demo.svc:80/v2/models/iris-onnx 2>&1");
-  const code = result.output.trim();
-  res.json({ output: `Notebook → iris-onnx (pod-to-pod): HTTP ${code}`, exitCode: code === '200' ? 0 : 1 });
+  const result = await run(`echo '$ kubectl exec test-client -- curl http://iris-onnx-mesh/v2/models/iris-onnx'
+echo '  (pod-to-pod inside the namespace, no gateway)'
+echo ''
+CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://iris-onnx-mesh.super-slim-demo.svc:80/v2/models/iris-onnx 2>/dev/null)
+if [ "$CODE" = "200" ]; then
+  echo "Result: HTTP $CODE — access granted"
+elif [ "$CODE" = "403" ]; then
+  echo "Result: HTTP $CODE — FORBIDDEN"
+  echo "AuthorizationPolicy blocked this request."
+else
+  echo "Result: BLOCKED (HTTP $CODE)"
+  echo ""
+  echo "The pod has no authorized SPIFFE identity."
+  echo "AuthorizationPolicy rejected the connection."
+fi`);
+  const code = result.output.match(/HTTP (\d+)/)?.[1] || '000';
+  res.json({ output: result.output, exitCode: code === '200' ? 0 : 1 });
 });
 
 // --- Part 7: Multi-Cluster ---

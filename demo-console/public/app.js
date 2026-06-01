@@ -80,8 +80,8 @@ async function refreshStatus() {
 }
 
 async function runInferAndShowLogs() {
-  await runAction('/api/infer', 'out-4a', 'POST');
-  setTimeout(() => runAction('/api/ztunnel-logs', 'out-4b'), 2000);
+  await runAction('/api/infer', 'out-1a', 'POST');
+  setTimeout(() => runAction('/api/ztunnel-logs', 'out-1b'), 2000);
 }
 
 async function loadDomain() {

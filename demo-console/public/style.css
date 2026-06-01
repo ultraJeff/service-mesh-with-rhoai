@@ -64,7 +64,7 @@ h1 + p { color: #8b949e; font-size: 13px; margin-bottom: 24px; }
   border-radius: 0 4px 4px 0;
 }
 
-.action-group { margin-bottom: 12px; }
+.action-group { margin-bottom: 12px; margin-top: 16px; }
 .action-group-label { font-size: 12px; color: #8b949e; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
 
 .btn {
