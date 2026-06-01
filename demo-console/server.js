@@ -71,6 +71,38 @@ echo '  2. kube-rbac-proxy — validates OAuth tokens + TLS (app layer)'`);
   res.json(result);
 });
 
+app.get('/api/rhoai-gateway-flow', async (req, res) => {
+  const result = await run(`echo 'RHOAI already uses Service Mesh 3 for ingress (Gateway API).'
+echo 'Here is the transaction path that exists out of the box:'
+echo ''
+echo '  1. Client HTTPS request'
+echo '     ↓'
+echo '  2. OpenShift Route (reencrypt TLS)'
+echo '     kind: Route, namespace: openshift-ingress'
+echo '     ↓'
+echo '  3. Gateway API Service'
+echo '     name: data-science-gateway-data-science-gateway-class'
+echo '     ↓'
+echo '  4. Envoy proxy pod (istio-proxy, NOT a sidecar)'
+echo '     Receives config from istiod via xDS over gRPC'
+echo '     Config updates apply hot — no pod restarts needed'
+echo '     ↓'
+echo '  5. kube-auth-proxy (OAuth authentication)'
+echo '     Validates user identity with Kubernetes API server'
+echo '     ↓'
+echo '  6. HTTPRoute (routes by path/hostname to backend services)'
+echo '     e.g. / → rhods-dashboard:8443'
+echo '     e.g. /notebook/... → notebook service:8888'
+echo '     ↓'
+echo '  7. Backend pod (dashboard, notebook, etc.)'
+echo ''
+echo 'This handles north-south ingress and authentication.'
+echo 'What it does NOT provide: east-west mTLS, workload identity,'
+echo 'mutual authentication, or customer-managed certificates.'
+echo 'That is what we add with the ambient mesh.'`);
+  res.json(result);
+});
+
 // --- Part 2: Ambient Mesh ---
 
 app.get('/api/ztunnel-pods', async (req, res) => {

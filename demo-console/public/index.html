@@ -62,10 +62,10 @@
     </div>
     <div class="section-body">
       <div class="talking-point">
-        RHOAI 3.4 provides TLS at the ingress layer and optional auth via <code>enable-auth: true</code>.
-        For most deployments, this is sufficient. For <strong>regulated and high-security environments</strong>
-        that require mutual authentication, workload identity, and east-west encryption &mdash;
-        we harden RHOAI with a service mesh.
+        RHOAI <strong>already uses Service Mesh 3</strong> for ingress via the Gateway API &mdash;
+        it handles north-south traffic routing and OAuth authentication out of the box.
+        For <strong>regulated and high-security environments</strong> that also require mutual authentication,
+        workload identity, and east-west encryption, we extend this with the ambient mesh.
       </div>
 
       <div style="background:#1c2129; border-radius:6px; padding:14px; margin-bottom:12px; font-size:13px; line-height:1.7;">
@@ -80,6 +80,11 @@
           <tr><td style="padding:4px 8px;">L7 authorization policy</td><td style="padding:4px 8px; color:#8b949e;">No</td><td style="padding:4px 8px; color:#3fb950;"><strong>Yes (waypoint)</strong></td></tr>
         </table>
       </div>
+      <div class="action-group">
+        <div class="action-group-label">What RHOAI already provides (the baseline)</div>
+        <button class="btn" onclick="runAction('/api/rhoai-gateway-flow', 'out-2a')">Show RHOAI Gateway Transaction Path</button>
+      </div>
+      <pre class="output" id="out-2a"></pre>
     </div>
   </div>
 
@@ -171,6 +176,10 @@
             &nbsp;&nbsp;Both are Gateway API resources — same K8s standard,<br>
             &nbsp;&nbsp;different GatewayClass, different role.<br>
             &nbsp;&nbsp;Istio deploys an Envoy pod for each one automatically.<br><br>
+            &nbsp;&nbsp;<strong>Hot config:</strong> Envoy never reads static config files.<br>
+            &nbsp;&nbsp;istiod pushes updates via xDS over gRPC. When something<br>
+            &nbsp;&nbsp;changes (new HTTPRoute, new pod, rotated cert), Envoy<br>
+            &nbsp;&nbsp;applies it live — no restart needed.<br><br>
             <strong style="color:#58a6ff;">What is HBONE?</strong><br>
             &nbsp;&nbsp;HTTP-Based Overlay Network Encapsulation.<br>
             &nbsp;&nbsp;An HTTP/2 CONNECT tunnel with mTLS on port 15008.<br>
