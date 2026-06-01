@@ -14,16 +14,34 @@
 
 ## Problem Statement
 
-RHOAI 3.4 ships an embedded Istio instance that functions **only as a Gateway API ingress controller**. It cannot provide pod-to-pod mTLS, sidecar injection, or any east-west security. Out of the box:
+RHOAI 3.4 ships an embedded Istio instance that functions **only as a Gateway API ingress controller**. It cannot provide pod-to-pod mTLS or any east-west security.
 
-| Traffic Hop | Dashboard | Model Serving (vLLM) | Notebooks |
-|-------------|-----------|---------------------|-----------|
-| Client → OCP Router | TLS 1.3 | TLS 1.3 | TLS 1.3 |
-| Router → RHOAI Gateway | TLS (reencrypt) | N/A (direct Route) | TLS (reencrypt) |
-| Gateway → Backend Pod | TLS (port 8443) | **Plain HTTP** | **Plain HTTP** |
-| Pod → Pod (east-west) | **None** | **None** | **None** |
+### Model Serving Exposure Options (OOTB)
 
-The backend hops for model serving and notebooks are unencrypted. There is no mutual authentication between workloads.
+RHOAI offers two modes for exposing InferenceServices, controlled by the `security.opendatahub.io/enable-auth` annotation:
+
+| | `enable-auth: false` (default) | `enable-auth: true` |
+|---|---|---|
+| Route type | Edge | Reencrypt |
+| Router → Pod | **Plain HTTP** (port 8080) | TLS via kube-rbac-proxy (port 8443) |
+| Auth | None | OpenShift OAuth token validation |
+| Mutual auth | No | No |
+| Workload identity | No | No |
+| Pod-to-pod (east-west) | **Unencrypted** | **Unencrypted** |
+
+Even with `enable-auth: true`, the TLS is **server-side only** — no mutual authentication, no workload identity (SPIFFE), and no east-west encryption between pods.
+
+### Full TLS Gap Table
+
+| Traffic Hop | Dashboard | Model (`auth: false`) | Model (`auth: true`) | Notebooks |
+|-------------|-----------|----------------------|---------------------|-----------|
+| Client → OCP Router | TLS 1.3 | TLS 1.3 | TLS 1.3 | TLS 1.3 |
+| Router → Backend | TLS (reencrypt) | **Plain HTTP** | TLS (kube-rbac-proxy) | **Plain HTTP** |
+| Mutual authentication | No | No | No | No |
+| Workload identity (SPIFFE) | No | No | No | No |
+| Pod → Pod (east-west) | **None** | **None** | **None** | **None** |
+
+**What's missing regardless of auth mode:** mutual authentication (both sides prove identity), workload identity (SPIFFE SVIDs), and east-west encryption between pods.
 
 ## Solution: Ambient Mesh with Custom CA and Mesh Gateway
 

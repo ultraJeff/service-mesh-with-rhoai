@@ -1,0 +1,67 @@
+async function api(method, path) {
+  const btn = event?.target;
+  if (btn) btn.classList.add('running');
+  try {
+    const res = await fetch(path, { method });
+    const data = await res.json();
+    return data;
+  } catch (e) {
+    return { output: `Error: ${e.message}`, exitCode: 1 };
+  } finally {
+    if (btn) btn.classList.remove('running');
+  }
+}
+
+function showOutput(id, data) {
+  const el = document.getElementById(id);
+  const text = typeof data === 'string' ? data : (data.output || JSON.stringify(data, null, 2));
+  el.textContent = text.trim() || '(no output)';
+  el.classList.add('visible');
+  el.classList.toggle('error', data.exitCode > 0);
+  el.classList.toggle('success-border', data.exitCode === 0);
+}
+
+async function runAction(path, outputId, method = 'GET') {
+  const data = await api(method, path);
+  showOutput(outputId, data);
+}
+
+function toggleSection(el) {
+  el.closest('.section').classList.toggle('open');
+}
+
+async function refreshStatus() {
+  try {
+    const health = await (await fetch('/api/health')).json();
+    const nodeLines = health.nodes.trim().split('\n').filter(l => l.trim());
+    const allReady = nodeLines.every(l => l.includes('Ready'));
+    document.getElementById('status-nodes').innerHTML =
+      `<span class="status-dot ${allReady ? 'green' : 'red'}"></span>${nodeLines.length} nodes ${allReady ? 'Ready' : 'NOT READY'}`;
+
+    const meshLines = health.mesh.trim().split('\n').filter(l => l.trim());
+    const meshHealthy = meshLines.every(l => l.includes('Healthy') || l.includes('True'));
+    document.getElementById('status-mesh').innerHTML =
+      `<span class="status-dot ${meshHealthy ? 'green' : 'yellow'}"></span>${meshHealthy ? 'Healthy' : 'Degraded'}`;
+
+    const podLines = health.pods.trim().split('\n').filter(l => l.trim());
+    const podsRunning = podLines.filter(l => l.includes('Running')).length;
+    document.getElementById('status-pods').innerHTML =
+      `<span class="status-dot ${podsRunning > 0 ? 'green' : 'red'}"></span>${podsRunning} pods running`;
+
+    const authz = await (await fetch('/api/authz-policy/status')).json();
+    const policyActive = authz.active;
+    document.getElementById('status-authz').innerHTML =
+      `<span class="status-dot ${policyActive ? 'yellow' : 'green'}"></span>${policyActive ? 'ACTIVE (restricting access)' : 'None (open access)'}`;
+  } catch (e) {
+    document.getElementById('status-nodes').innerHTML =
+      `<span class="status-dot red"></span>API unreachable`;
+  }
+}
+
+async function runInferAndShowLogs() {
+  await runAction('/api/infer', 'out-4a', 'POST');
+  setTimeout(() => runAction('/api/ztunnel-logs', 'out-4b'), 2000);
+}
+
+refreshStatus();
+setInterval(refreshStatus, 5000);
