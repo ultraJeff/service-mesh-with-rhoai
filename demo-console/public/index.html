@@ -138,27 +138,49 @@
       <pre class="output" id="out-3c"></pre>
 
       <details class="deep-dive">
-        <summary>Deep dive: ztunnel vs Envoy vs Waypoints</summary>
+        <summary>Deep dive: ztunnel vs Envoy in ambient mesh</summary>
         <div class="deep-dive-content">
           <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
-            <strong style="color:#58a6ff;">Three proxy types in ambient mesh:</strong><br><br>
-            <strong style="color:#3fb950;">ztunnel</strong> (Rust, L4 only)<br>
+            <strong style="color:#58a6ff;">Two proxy technologies in ambient mesh:</strong><br><br>
+            <strong style="color:#3fb950;">ztunnel</strong> (Rust, L4)<br>
             &nbsp;&nbsp;DaemonSet — one per node, shared by all pods<br>
-            &nbsp;&nbsp;Handles: mTLS, HBONE tunnels, TCP metrics<br>
-            &nbsp;&nbsp;Cannot: inspect HTTP headers, route by path, enforce AuthZ<br>
-            &nbsp;&nbsp;Lightweight — no Envoy overhead per pod<br><br>
-            <strong style="color:#3fb950;">Waypoint proxy</strong> (Envoy, L7)<br>
-            &nbsp;&nbsp;Deployment — one per namespace (or per service)<br>
-            &nbsp;&nbsp;Handles: AuthorizationPolicy, retries, timeouts, rate limits, header routing<br>
-            &nbsp;&nbsp;Only deployed where L7 policy is needed (opt-in)<br>
-            &nbsp;&nbsp;Traffic flow: ztunnel &rarr; waypoint (L7 inspection) &rarr; ztunnel &rarr; destination<br><br>
-            <strong style="color:#3fb950;">Mesh gateway</strong> (Envoy, L7)<br>
-            &nbsp;&nbsp;Deployment — north-south ingress for external traffic<br>
-            &nbsp;&nbsp;Handles: TLS termination, HTTP routing via HTTPRoutes<br>
-            &nbsp;&nbsp;Has its own SPIFFE identity for mTLS to backends<br><br>
-            <span style="color:#d29922;">In sidecar mode, every pod gets Envoy. In ambient mode, only<br>
-            waypoints and gateways run Envoy. ztunnel (Rust) handles<br>
-            the common case (L4 mTLS) with much less overhead.</span>
+            &nbsp;&nbsp;Handles: mTLS, HBONE tunnels, TCP metrics, L4 AuthZ (identity + port)<br>
+            &nbsp;&nbsp;Cannot: inspect HTTP headers, route by path, retries, rate limits<br>
+            &nbsp;&nbsp;Lightweight — no Envoy overhead per pod<br>
+            &nbsp;&nbsp;This is what makes ambient different from sidecar mode<br><br>
+            &nbsp;&nbsp;Both ztunnel and Envoy get config from istiod via <strong>xDS</strong><br>
+            &nbsp;&nbsp;(a gRPC protocol for pushing config to proxies).<br>
+            &nbsp;&nbsp;Envoy gets full L7 config (routes, listeners, clusters).<br>
+            &nbsp;&nbsp;ztunnel gets only what it needs:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; Workload discovery (pod IPs, namespaces, service accounts)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; L4 authorization rules (who can connect to whom)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; SPIFFE certs (via SDS)<br><br>
+            <strong style="color:#3fb950;">Envoy</strong> (L7)<br>
+            &nbsp;&nbsp;Only deployed where L7 capabilities are needed<br>
+            &nbsp;&nbsp;Shows up in two roles, both created via Gateway API:<br><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<strong>Waypoint proxy</strong> (GatewayClass: <code>istio-waypoint</code>)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;East-west L7 policy inside the mesh<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Handles: AuthorizationPolicy, retries, timeouts<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Created by applying a Gateway CR in the app namespace<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Opt-in per namespace — see Part 6 deep-dive for details<br><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<strong>Mesh gateway</strong> (GatewayClass: <code>istio</code>)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;North-south ingress for external traffic<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Handles: TLS termination, HTTP routing via HTTPRoutes<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Created by applying a Gateway CR in istio-system<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Has its own SPIFFE identity for mTLS to backends<br><br>
+            &nbsp;&nbsp;Both are Gateway API resources — same K8s standard,<br>
+            &nbsp;&nbsp;different GatewayClass, different role.<br>
+            &nbsp;&nbsp;Istio deploys an Envoy pod for each one automatically.<br><br>
+            <strong style="color:#58a6ff;">What is HBONE?</strong><br>
+            &nbsp;&nbsp;HTTP-Based Overlay Network Encapsulation.<br>
+            &nbsp;&nbsp;An HTTP/2 CONNECT tunnel with mTLS on port 15008.<br>
+            &nbsp;&nbsp;ztunnel wraps pod traffic inside this tunnel &mdash;<br>
+            &nbsp;&nbsp;the original TCP connection rides inside an encrypted<br>
+            &nbsp;&nbsp;HTTP/2 stream between nodes. This is what makes<br>
+            &nbsp;&nbsp;ambient mesh encryption transparent to applications.<br><br>
+            <span style="color:#d29922;">In sidecar mode, every pod gets Envoy. In ambient mode,<br>
+            Envoy is opt-in (waypoints + gateways only). ztunnel (Rust)<br>
+            handles the common case (L4 mTLS) with much less overhead.</span>
           </div>
         </div>
       </details>
@@ -353,6 +375,41 @@
         <button class="btn primary" onclick="runAction('/api/test-pod-to-pod', 'out-6c', 'POST')">Test Client &rarr; Iris</button>
       </div>
       <pre class="output" id="out-6c"></pre>
+
+      <details class="deep-dive">
+        <summary>Deep dive: How the waypoint proxy works</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">The waypoint is an Envoy proxy enrolled in the mesh.</strong><br>
+            It has its own iptables rules, its own SPIFFE identity,<br>
+            and ztunnel encrypts its traffic just like any other pod.<br><br>
+            <strong style="color:#58a6ff;">Traffic flow (two separate mTLS hops):</strong><br><br>
+            <span style="color:#c9d1d9;">
+            &nbsp;&nbsp;Pod A (app sends HTTP)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;│<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;▼<br>
+            &nbsp;&nbsp;ztunnel (node A) ──<span style="color:#3fb950;"> HBONE mTLS hop 1 </span>──▶ ztunnel (waypoint node)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Envoy (waypoint)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  sees plain HTTP<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  checks AuthorizationPolicy<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;  applies retries/timeouts<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼<br>
+            &nbsp;&nbsp;ztunnel (waypoint node) ──<span style="color:#3fb950;"> HBONE mTLS hop 2 </span>──▶ ztunnel (node B)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Pod B (receives HTTP)<br>
+            </span><br>
+            <span style="color:#d29922;">Envoy never does mTLS — ztunnel handles encryption<br>
+            on both hops. Envoy only sees plain HTTP and makes<br>
+            L7 decisions. This is why <code>mesh-waypoint</code> must be<br>
+            in the AuthorizationPolicy allow list — it's the<br>
+            source identity that Pod B's ztunnel sees on hop 2.</span>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -366,16 +423,22 @@
     <div class="section-body">
       <div class="talking-point">
         Two clusters, two meshes, <strong>one root CA</strong>.
-        Each cluster has its own intermediate CA for workload certs,
-        but they chain to the same trust anchor. Cross-cluster mTLS
-        is a configuration change, not a rebuild.
+        Each cluster has its own intermediate CA, but they chain to the
+        same trust anchor. Each control plane already <strong>discovers the
+        other cluster's services</strong> via remote secrets. Cross-cluster
+        mTLS traffic routing is the next step.
       </div>
       <div class="action-group">
-        <div class="action-group-label">Prove shared trust</div>
+        <div class="action-group-label">Shared trust (same root CA = cross-cluster identity verification)</div>
         <button class="btn primary" onclick="runAction('/api/multi-cluster-verify', 'out-7a')">Compare Root CA Fingerprints</button>
         <button class="btn" onclick="runAction('/api/multi-cluster-certs', 'out-7a')">Compare Gateway Cert Chains</button>
       </div>
       <pre class="output" id="out-7a"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Federation status and roadmap</div>
+        <button class="btn primary" onclick="runAction('/api/multi-cluster-status', 'out-7b')">Show Multi-Cluster Status</button>
+      </div>
+      <pre class="output" id="out-7b"></pre>
       <div class="action-group">
         <div class="action-group-label">Observability</div>
         <a class="link-btn" id="link-kiali" href="#" target="_blank">Kiali Dashboard</a>

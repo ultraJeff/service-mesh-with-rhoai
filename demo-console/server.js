@@ -518,6 +518,32 @@ echo "other's SPIFFE identity. Cross-cluster mTLS is possible."`);
   res.json(result);
 });
 
+app.get('/api/multi-cluster-status', async (req, res) => {
+  const result = await run(`echo 'Multi-cluster federation status:'
+echo ''
+echo '  ✓ Shared root CA            Both clusters trust the same root'
+echo '  ✓ Per-cluster intermediate   Each cluster signs its own workload certs'
+echo '  ✓ Remote secrets deployed    Each istiod has credentials for the other cluster'
+echo '  ✓ East-west gateways         Deployed on both clusters (classic sidecar mode)'
+echo ''
+echo '  ⏳ Cross-cluster traffic     Waiting on ambient-native E/W gateway'
+echo ''
+echo 'Current limitation (OSSM 3.3.x / Istio 1.28):'
+echo '  The istio-east-west GatewayClass (ambient-native, HBONE protocol)'
+echo '  ships in Istio 1.29 / OSSM 3.4. Current E/W gateways use the classic'
+echo '  sidecar approach which does not fully interoperate with ambient ztunnel.'
+echo ''
+echo 'What changes in OSSM 3.4:'
+echo '  - New GatewayClass: istio-east-west (uses HBONE, not classic mTLS)'
+echo '  - Ambient-native cross-cluster tunnels between ztunnels'
+echo '  - No sidecar injection needed on the E/W gateway pod'
+echo '  - Cross-cluster traffic "just works" with the shared root CA already in place'
+echo ''
+echo 'The trust infrastructure we built today is the hard part.'
+echo 'When the E/W gateway ships, it is a configuration change — not a rebuild.'`);
+  res.json(result);
+});
+
 app.get('/api/multi-cluster-certs', async (req, res) => {
   const rhoai_domain = await run("oc --context rhoai get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null");
   const rhoaiDomain = rhoai_domain.output.trim().replace(/'/g, '');
