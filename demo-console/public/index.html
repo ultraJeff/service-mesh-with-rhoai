@@ -85,6 +85,43 @@
         <button class="btn" onclick="runAction('/api/rhoai-gateway-flow', 'out-2a')">Show RHOAI Gateway Transaction Path</button>
       </div>
       <pre class="output" id="out-2a"></pre>
+
+      <details class="deep-dive">
+        <summary>Deep dive: BackendTLSPolicy (coming in OCP 4.22+)</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">The gap today:</strong><br>
+            &nbsp;&nbsp;The RHOAI gateway (OCP Gateway API) and our ambient mesh<br>
+            &nbsp;&nbsp;are two separate Istio control planes. The OCP gateway<br>
+            &nbsp;&nbsp;cannot speak mTLS to mesh-enrolled backends because they<br>
+            &nbsp;&nbsp;have different trust domains (OCPBUGS-82544).<br><br>
+            <strong style="color:#58a6ff;">Current approach:</strong><br>
+            &nbsp;&nbsp;We deploy a mesh gateway (GatewayClass: <code>istio</code>) that is<br>
+            &nbsp;&nbsp;part of the ambient mesh and speaks mTLS to backends.<br>
+            &nbsp;&nbsp;For models with <code>enable-auth: true</code>, a separate mesh-internal<br>
+            &nbsp;&nbsp;Service routes traffic from the mesh gateway to the app container.<br><br>
+            <strong style="color:#3fb950;">Simplification: BackendTLSPolicy (Gateway API v1alpha3)</strong><br>
+            &nbsp;&nbsp;Expected in OCP 4.22. Lets the OCP gateway natively connect<br>
+            &nbsp;&nbsp;to mesh-enrolled backends over TLS &mdash; eliminating the need<br>
+            &nbsp;&nbsp;for the separate mesh-internal Service.<br><br>
+            &nbsp;&nbsp;<span style="color:#c9d1d9;">apiVersion: gateway.networking.k8s.io/v1alpha3<br>
+            &nbsp;&nbsp;kind: BackendTLSPolicy<br>
+            &nbsp;&nbsp;spec:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;targetRefs:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- kind: Service<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;name: iris-onnx-predictor<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;validation:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;caCertificateRefs:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- name: mesh-root-ca-secret<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind: Secret</span><br><br>
+            <span style="color:#d29922;">This simplifies the ingress path but does NOT replace the mesh.<br>
+            The ambient mesh is still required for east-west mTLS, SPIFFE<br>
+            identity, AuthorizationPolicy, and multi-cluster federation.<br>
+            BackendTLSPolicy bridges ingress to mesh &mdash; it is not the mesh itself.<br>
+            RFE-9140 tracks this for RHOAI + OSSM integration.</span>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
