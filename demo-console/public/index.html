@@ -136,6 +136,32 @@
         <button class="btn primary" onclick="runAction('/api/namespace-labels', 'out-3c')">Show Namespace Labels</button>
       </div>
       <pre class="output" id="out-3c"></pre>
+
+      <details class="deep-dive">
+        <summary>Deep dive: ztunnel vs Envoy vs Waypoints</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">Three proxy types in ambient mesh:</strong><br><br>
+            <strong style="color:#3fb950;">ztunnel</strong> (Rust, L4 only)<br>
+            &nbsp;&nbsp;DaemonSet — one per node, shared by all pods<br>
+            &nbsp;&nbsp;Handles: mTLS, HBONE tunnels, TCP metrics<br>
+            &nbsp;&nbsp;Cannot: inspect HTTP headers, route by path, enforce AuthZ<br>
+            &nbsp;&nbsp;Lightweight — no Envoy overhead per pod<br><br>
+            <strong style="color:#3fb950;">Waypoint proxy</strong> (Envoy, L7)<br>
+            &nbsp;&nbsp;Deployment — one per namespace (or per service)<br>
+            &nbsp;&nbsp;Handles: AuthorizationPolicy, retries, timeouts, rate limits, header routing<br>
+            &nbsp;&nbsp;Only deployed where L7 policy is needed (opt-in)<br>
+            &nbsp;&nbsp;Traffic flow: ztunnel &rarr; waypoint (L7 inspection) &rarr; ztunnel &rarr; destination<br><br>
+            <strong style="color:#3fb950;">Mesh gateway</strong> (Envoy, L7)<br>
+            &nbsp;&nbsp;Deployment — north-south ingress for external traffic<br>
+            &nbsp;&nbsp;Handles: TLS termination, HTTP routing via HTTPRoutes<br>
+            &nbsp;&nbsp;Has its own SPIFFE identity for mTLS to backends<br><br>
+            <span style="color:#d29922;">In sidecar mode, every pod gets Envoy. In ambient mode, only<br>
+            waypoints and gateways run Envoy. ztunnel (Rust) handles<br>
+            the common case (L4 mTLS) with much less overhead.</span>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -169,10 +195,16 @@
       </div>
       <pre class="output" id="out-4c"></pre>
       <div class="action-group">
-        <div class="action-group-label">SPIFFE workload identities (auto-assigned by istiod)</div>
-        <button class="btn primary" onclick="runAction('/api/spiffe-identities', 'out-4d')">Show SPIFFE Identities</button>
+        <div class="action-group-label">How does a workload get its SPIFFE identity?</div>
+        <button class="btn primary" onclick="runAction('/api/spiffe-how', 'out-4d')">Show the Flow</button>
       </div>
       <pre class="output" id="out-4d"></pre>
+      <div class="action-group">
+        <div class="action-group-label">SPIFFE identities on this cluster</div>
+        <button class="btn" onclick="runAction('/api/spiffe-identities', 'out-4e')">List All Identities</button>
+        <button class="btn" onclick="runAction('/api/spiffe-cert-details', 'out-4e')">Show Live Certificate (SAN field)</button>
+      </div>
+      <pre class="output" id="out-4e"></pre>
 
       <div style="background:#1c2129; border-left:3px solid #d29922; border-radius:0 6px 6px 0; padding:12px 14px; margin-top:16px; font-size:12px; line-height:1.7;">
         <strong style="color:#d29922;">Going further: Zero Trust Workload Identity Manager</strong><br><br>
@@ -189,6 +221,46 @@
         <span style="color:#c9d1d9;">Same SPIFFE format, same ztunnel mTLS &mdash; but adds hardware root of trust,
         cross-cloud federation, and centralized identity governance.</span>
       </div>
+
+      <details class="deep-dive">
+        <summary>Deep dive: ReferenceGrants (Gateway API cross-namespace trust)</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">Problem:</strong> Gateway API is strict about cross-namespace references.<br>
+            An HTTPRoute in namespace A can reference a Gateway in namespace B<br>
+            (if the Gateway allows it), but a Gateway in namespace A cannot<br>
+            route to a Service in namespace B without explicit permission.<br><br>
+            <strong style="color:#58a6ff;">Solution: ReferenceGrant</strong><br>
+            A ReferenceGrant in the <em>target</em> namespace says:<br>
+            &nbsp;&nbsp;"I allow resources of type X from namespace Y to reference<br>
+            &nbsp;&nbsp;my Services (or Secrets, etc.)"<br><br>
+            <strong style="color:#3fb950;">Example:</strong><br>
+            <span style="color:#c9d1d9;">
+            &nbsp;&nbsp;apiVersion: gateway.networking.k8s.io/v1beta1<br>
+            &nbsp;&nbsp;kind: ReferenceGrant<br>
+            &nbsp;&nbsp;metadata:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;name: allow-gateway-to-model<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;namespace: super-slim-demo<br>
+            &nbsp;&nbsp;spec:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;from:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- group: gateway.networking.k8s.io<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind: HTTPRoute<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;namespace: istio-system<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;to:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- group: ""<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind: Service<br>
+            </span><br>
+            <strong style="color:#58a6ff;">In our setup:</strong><br>
+            &nbsp;&nbsp;Our HTTPRoutes are in <code>super-slim-demo</code> (same namespace as<br>
+            &nbsp;&nbsp;the Services), so no ReferenceGrant is needed for backendRefs.<br>
+            &nbsp;&nbsp;The Gateway in <code>istio-system</code> allows routes from all namespaces<br>
+            &nbsp;&nbsp;via <code>allowedRoutes.namespaces.from: All</code>.<br><br>
+            <span style="color:#d29922;">ReferenceGrants become important when the Gateway and Services<br>
+            are in different namespaces &mdash; common in multi-team environments<br>
+            where platform teams own the gateway and app teams own the services.</span>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -219,6 +291,32 @@
         <button class="btn danger" onclick="runAction('/api/test-bypass', 'out-5c', 'POST')">Try Direct Access</button>
       </div>
       <pre class="output" id="out-5c"></pre>
+
+      <details class="deep-dive">
+        <summary>Deep dive: PeerAuthentication</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">PeerAuthentication</strong> controls whether pods accept non-mTLS traffic:<br><br>
+            <strong style="color:#3fb950;">STRICT</strong> (what we use)<br>
+            &nbsp;&nbsp;Every inbound connection MUST present a valid SPIFFE cert.<br>
+            &nbsp;&nbsp;Plain HTTP is rejected. No exceptions.<br>
+            &nbsp;&nbsp;This is what enforces zero trust &mdash; if you're not in the<br>
+            &nbsp;&nbsp;mesh, you can't talk to these pods.<br><br>
+            <strong style="color:#d29922;">PERMISSIVE</strong> (migration mode)<br>
+            &nbsp;&nbsp;Accept both mTLS and plain HTTP.<br>
+            &nbsp;&nbsp;Useful during migration when some traffic sources<br>
+            &nbsp;&nbsp;aren't in the mesh yet (e.g., RHOAI gateway before<br>
+            &nbsp;&nbsp;we deployed our mesh gateway).<br><br>
+            <strong style="color:#8b949e;">DISABLE</strong><br>
+            &nbsp;&nbsp;No mTLS enforcement. Not recommended.<br><br>
+            <span style="color:#d29922;">Scope: can be set per-namespace, per-workload, or even<br>
+            per-port. Example: we allow PERMISSIVE on port 8082<br>
+            (Prometheus metrics) while keeping STRICT on port 8080<br>
+            (model serving) &mdash; so Prometheus can scrape without<br>
+            being in the mesh.</span>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -245,6 +343,7 @@
       <div class="action-group">
         <div class="action-group-label">Step 2: Apply policy</div>
         <button class="btn success" onclick="runAction('/api/authz-policy/apply', 'out-6b', 'POST')">Apply AuthorizationPolicy</button>
+        <button class="btn" onclick="runAction('/api/authz-policy/explain', 'out-6b')">What does this policy say?</button>
         <button class="btn danger" onclick="runAction('/api/authz-policy/delete', 'out-6b', 'POST')">Remove Policy</button>
       </div>
       <pre class="output" id="out-6b"></pre>

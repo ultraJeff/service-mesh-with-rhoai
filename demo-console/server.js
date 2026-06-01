@@ -222,6 +222,74 @@ echo 'You create this one secret. Istio handles everything else.'`);
   res.json(result);
 });
 
+app.get('/api/spiffe-how', async (req, res) => {
+  const result = await run(`echo 'How a workload gets its SPIFFE identity:'
+echo ''
+echo '1. Pod starts in an ambient-enrolled namespace'
+echo '2. ztunnel detects the new pod (via istio-cni)'
+echo '3. ztunnel requests a cert from istiod:'
+echo '     "I need an identity for ns/super-slim-demo, sa/default"'
+echo '4. istiod validates the request via K8s TokenReview API'
+echo '5. istiod constructs the SPIFFE URI from namespace + service account:'
+echo '     spiffe://cluster.local/ns/super-slim-demo/sa/default'
+echo '6. istiod signs an X.509 cert with that URI as the SAN (Subject Alternative Name)'
+echo '     using the intermediate CA from the cacerts secret'
+echo '7. ztunnel holds the cert in memory (app never sees it)'
+echo '8. Every mTLS handshake: ztunnel presents this cert'
+echo '     the other side reads the SAN to verify identity'
+echo '9. Cert auto-rotates every 24h — zero downtime, zero manual work'
+echo ''
+echo 'The SPIFFE identity IS the SAN field in the certificate.'
+echo 'AuthorizationPolicy matches on it. That is how identity-based'
+echo 'access control works without tokens or passwords.'`);
+  res.json(result);
+});
+
+app.get('/api/spiffe-cert-details', async (req, res) => {
+  const wpResult = await run("oc get pods -n super-slim-demo -l gateway.networking.k8s.io/gateway-name=mesh-waypoint -o jsonpath='{.items[0].metadata.name}' 2>/dev/null");
+  const wp = wpResult.output.trim().replace(/'/g, '');
+  const certResult = await run(`oc exec -n super-slim-demo ${wp} -- pilot-agent request GET /certs 2>/dev/null`);
+  let certInfo = '';
+  try {
+    const d = JSON.parse(certResult.output);
+    const seen = new Set();
+    for (const c of (d.certificates || [])) {
+      for (const cc of (c.cert_chain || [])) {
+        for (const s of (cc.subject_alt_names || [])) {
+          if (s.uri && !seen.has(s.uri)) {
+            seen.add(s.uri);
+            certInfo += `  SPIFFE SAN:  ${s.uri}\n`;
+            certInfo += `  Valid from:  ${cc.valid_from || '?'}\n`;
+            certInfo += `  Expires:     ${cc.expiration_time || '?'}\n\n`;
+          }
+        }
+      }
+      if (!seen.has('ca') && c.ca_cert) {
+        for (const cc of c.ca_cert) {
+          if (parseInt(cc.days_until_expiration) > 365) {
+            certInfo += `  Signing CA:  ${cc.days_until_expiration} days remaining (intermediate CA from cacerts)\n\n`;
+            seen.add('ca');
+            break;
+          }
+        }
+      }
+    }
+  } catch (e) {
+    certInfo = `  (could not parse cert: ${e.message})\n`;
+  }
+  const output = `Live SPIFFE certificate from the waypoint proxy (Envoy):
+
+Waypoint pod: ${wp}
+
+${certInfo}This cert was signed by istiod using the intermediate CA.
+The SPIFFE SAN (Subject Alternative Name) is the identity.
+
+  ↑ This URI is what appears in ztunnel access logs.
+  ↑ This URI is what AuthorizationPolicy matches on.
+  ↑ This cert auto-rotates every 24h — no manual work.`;
+  res.json({ output, exitCode: 0 });
+});
+
 app.get('/api/spiffe-identities', async (req, res) => {
   const result = await run(`echo 'SPIFFE identity format:'
 echo '  spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>'
@@ -343,6 +411,30 @@ spec:
   res.json(result);
 });
 
+app.get('/api/authz-policy/explain', async (req, res) => {
+  const result = await run(`EXISTS=$(oc get authorizationpolicy iris-allow-gateway-only -n super-slim-demo --no-headers 2>/dev/null | wc -l | tr -d ' ')
+if [ "$EXISTS" = "0" ]; then
+  echo 'No AuthorizationPolicy applied. All mesh identities can reach all services.'
+else
+  echo 'AuthorizationPolicy: iris-allow-gateway-only'
+  echo ''
+  echo 'Rule: ALLOW traffic only from these SPIFFE identities:'
+  echo ''
+  echo '  ✓ mesh-gateway-istio  (the ingress gateway — external traffic)'
+  echo '  ✓ mesh-waypoint       (the waypoint proxy — internal forwarding)'
+  echo ''
+  echo 'Everyone else is DENIED:'
+  echo ''
+  echo '  ✗ test-client pod     (sa/default — not in the allow list)'
+  echo '  ✗ any other pod       (no matching identity)'
+  echo '  ✗ any other namespace (no matching identity)'
+  echo ''
+  echo 'Effect: the model is ONLY reachable through the mesh gateway.'
+  echo 'Internal lateral movement is blocked.'
+fi`);
+  res.json(result);
+});
+
 app.post('/api/authz-policy/delete', async (req, res) => {
   const result = await run('oc delete authorizationpolicy iris-allow-gateway-only -n super-slim-demo 2>&1');
   res.json(result);
@@ -403,16 +495,26 @@ app.get('/api/root-ca', async (req, res) => {
 });
 
 app.get('/api/multi-cluster-verify', async (req, res) => {
-  const result = await run(`echo '=== RHOAI Cluster ==='
-oc --context rhoai get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -fingerprint 2>/dev/null
-oc --context rhoai get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject 2>/dev/null
+  const result = await run(`RHOAI_FP=$(oc --context rhoai get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -fingerprint 2>/dev/null | cut -d= -f2)
+SNO_FP=$(oc --context sno get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -fingerprint 2>/dev/null | cut -d= -f2)
+RHOAI_INT=$(oc --context rhoai get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject 2>/dev/null | sed 's/subject=//')
+SNO_INT=$(oc --context sno get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject 2>/dev/null | sed 's/subject=//')
+
+echo 'Root CA (trust anchor):'
+echo "  RHOAI cluster: $RHOAI_FP"
+echo "  SNO cluster:   $SNO_FP"
+if [ "$RHOAI_FP" = "$SNO_FP" ]; then
+  echo "  ✓ MATCH — same root CA on both clusters"
+else
+  echo "  ✗ MISMATCH — different root CAs"
+fi
 echo ''
-echo '=== SNO Cluster ==='
-oc --context sno get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -fingerprint 2>/dev/null
-oc --context sno get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject 2>/dev/null
+echo 'Intermediate CAs (unique per cluster):'
+echo "  RHOAI: $RHOAI_INT"
+echo "  SNO:   $SNO_INT"
 echo ''
-echo 'Same root CA fingerprint = cross-cluster trust established.'
-echo 'Each cluster has its own intermediate CA for workload certs.'`);
+echo 'Same root = any workload on either cluster can verify the'
+echo "other's SPIFFE identity. Cross-cluster mTLS is possible."`);
   res.json(result);
 });
 
