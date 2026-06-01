@@ -191,13 +191,16 @@
     </div>
     <div class="section-body">
       <div class="talking-point">
-        The custom CA is the foundation for multi-cluster federation.
-        <strong>Same root CA on both clusters = cross-cluster mTLS.</strong>
-        Deploy the same cacerts secret to each cluster's istio-system namespace.
+        Both clusters share the <strong>same root CA</strong> but have their own intermediate CAs.
+        Any workload on either cluster can verify the other's SPIFFE identity
+        because they chain to the same trust anchor. This is the foundation for
+        cross-cluster mTLS &mdash; when east-west gateways are added, traffic flows
+        securely between clusters without per-cluster trust configuration.
       </div>
       <div class="action-group">
-        <div class="action-group-label">Root CA (shared across clusters)</div>
-        <button class="btn" onclick="runAction('/api/root-ca', 'out-7a')">Show Root CA Details</button>
+        <div class="action-group-label">Prove shared trust</div>
+        <button class="btn primary" onclick="runAction('/api/multi-cluster-verify', 'out-7a')">Compare Root CA Fingerprints</button>
+        <button class="btn" onclick="runAction('/api/multi-cluster-certs', 'out-7a')">Compare Gateway Cert Chains</button>
       </div>
       <pre class="output" id="out-7a"></pre>
     </div>

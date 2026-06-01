@@ -259,7 +259,36 @@ app.post('/api/test-pod-to-pod', async (req, res) => {
 // --- Part 7: Multi-Cluster ---
 
 app.get('/api/root-ca', async (req, res) => {
-  const result = await run("oc get secret mesh-root-ca-secret -n istio-system -o jsonpath='{.data.tls\\.crt}' 2>/dev/null | base64 -d | openssl x509 -noout -text 2>/dev/null | head -15");
+  const result = await run("oc get secret mesh-root-ca-secret -n istio-system -o jsonpath='{.data.tls\\.crt}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -fingerprint 2>/dev/null");
+  res.json(result);
+});
+
+app.get('/api/multi-cluster-verify', async (req, res) => {
+  const result = await run(`echo '=== RHOAI Cluster ==='
+oc --context rhoai get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -fingerprint 2>/dev/null
+oc --context rhoai get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject 2>/dev/null
+echo ''
+echo '=== SNO Cluster ==='
+oc --context sno get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -fingerprint 2>/dev/null
+oc --context sno get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject 2>/dev/null
+echo ''
+echo 'Same root CA fingerprint = cross-cluster trust established.'
+echo 'Each cluster has its own intermediate CA for workload certs.'`);
+  res.json(result);
+});
+
+app.get('/api/multi-cluster-certs', async (req, res) => {
+  const rhoai_domain = await run("oc --context rhoai get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null");
+  const rhoaiDomain = rhoai_domain.output.trim().replace(/'/g, '');
+  const sno_domain = await run("oc --context sno get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null");
+  const snoDomain = sno_domain.output.trim().replace(/'/g, '');
+  const result = await run(`echo '=== RHOAI cluster gateway cert ==='
+echo | openssl s_client -connect iris-onnx.${rhoaiDomain}:443 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null
+echo ''
+echo '=== SNO cluster gateway cert ==='
+echo | openssl s_client -connect httpbin.${snoDomain}:443 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null
+echo ''
+echo 'Different intermediate CAs, same root = federated trust.'`);
   res.json(result);
 });
 
