@@ -519,6 +519,95 @@ fi`);
   res.json({ output: result.output, exitCode: code === '200' ? 0 : 1 });
 });
 
+// --- Part 6b: Traffic Management (retries, timeouts) ---
+
+app.post('/api/test-503', async (req, res) => {
+  const result = await run(`echo '$ curl http://httpbin.super-slim-demo.svc/status/503'
+echo '  (httpbin returns a 503 error — simulating a transient failure)'
+echo ''
+CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://httpbin.super-slim-demo.svc/status/503 2>/dev/null)
+echo "Result: HTTP $CODE"
+echo ''
+if [ "$CODE" = "503" ]; then
+  echo "The request failed. Without retries, the client sees the error."
+else
+  echo "Unexpected result — retry policy may already be active."
+fi`);
+  res.json(result);
+});
+
+app.post('/api/retry-policy/apply', async (req, res) => {
+  const result = await run(`oc apply -f - <<ENDOFPOLICY 2>&1
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: httpbin-retries
+  namespace: super-slim-demo
+spec:
+  hosts:
+    - httpbin.super-slim-demo.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: httpbin.super-slim-demo.svc.cluster.local
+            port:
+              number: 80
+      retries:
+        attempts: 3
+        retryOn: 5xx
+      timeout: 5s
+ENDOFPOLICY`);
+  res.json(result);
+});
+
+app.post('/api/retry-policy/delete', async (req, res) => {
+  const result = await run('oc delete virtualservice httpbin-retries -n super-slim-demo 2>&1');
+  res.json(result);
+});
+
+app.get('/api/retry-policy/explain', async (req, res) => {
+  const result = await run(`EXISTS=$(oc get virtualservice httpbin-retries -n super-slim-demo --no-headers 2>/dev/null | wc -l | tr -d ' ')
+if [ "$EXISTS" = "0" ]; then
+  echo 'No retry policy applied.'
+  echo 'Requests that fail get returned to the client as-is.'
+else
+  echo 'VirtualService: httpbin-retries'
+  echo ''
+  echo '  retries:'
+  echo '    attempts: 3      (retry up to 3 times)'
+  echo '    retryOn: 5xx     (retry on any server error)'
+  echo '  timeout: 5s        (total request timeout)'
+  echo ''
+  echo 'The waypoint proxy (Envoy) handles retries automatically.'
+  echo 'The client sends one request — Envoy retries behind the scenes.'
+  echo 'If all retries fail, the client gets the final error.'
+fi`);
+  res.json(result);
+});
+
+app.post('/api/test-timeout', async (req, res) => {
+  const result = await run(`echo '$ curl http://httpbin.super-slim-demo.svc/delay/10'
+echo '  (httpbin delays response by 10 seconds)'
+echo ''
+START=$(date +%s)
+CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 15 http://httpbin.super-slim-demo.svc/delay/10 2>/dev/null)
+END=$(date +%s)
+ELAPSED=$((END - START))
+echo "Result: HTTP $CODE (took ~\${ELAPSED}s)"
+echo ''
+if [ "$CODE" = "504" ]; then
+  echo "The waypoint enforced the 5s timeout — request cut off before"
+  echo "the 10s delay completed. The client gets a fast failure instead"
+  echo "of waiting forever."
+elif [ "$ELAPSED" -gt 8 ]; then
+  echo "No timeout policy active — the request waited the full delay."
+  echo "Apply the retry policy (which includes timeout: 5s) to see the difference."
+else
+  echo "Request completed in \${ELAPSED}s."
+fi`);
+  res.json(result);
+});
+
 // --- Part 7: Multi-Cluster ---
 
 app.get('/api/root-ca', async (req, res) => {

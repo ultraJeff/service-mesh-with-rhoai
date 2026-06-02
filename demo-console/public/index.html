@@ -459,10 +459,62 @@
     </div>
   </div>
 
-  <!-- Part 7: Multi-Cluster -->
+  <!-- Part 7: Traffic Management -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
       <span class="section-number">7</span>
+      <span class="section-title">Traffic Management &mdash; Retries &amp; Timeouts</span>
+      <span class="section-time">3 min</span>
+    </div>
+    <div class="section-body">
+      <div class="talking-point">
+        Beyond security: the waypoint proxy handles <strong>traffic resilience</strong>.
+        Retries, timeouts, and circuit breaking &mdash; all configured declaratively.
+        The application doesn't need retry logic; the mesh handles it.
+      </div>
+      <div class="action-group">
+        <div class="action-group-label">Step 1: Simulate a failure (no retry policy)</div>
+        <button class="btn danger" onclick="runAction('/api/test-503', 'out-7a', 'POST')">Call httpbin /status/503</button>
+      </div>
+      <pre class="output" id="out-7a"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Step 2: Apply retry + timeout policy</div>
+        <button class="btn success" onclick="runAction('/api/retry-policy/apply', 'out-7b', 'POST')">Apply Retry Policy</button>
+        <button class="btn" onclick="runAction('/api/retry-policy/explain', 'out-7b')">What does this policy say?</button>
+        <button class="btn danger" onclick="runAction('/api/retry-policy/delete', 'out-7b', 'POST')">Remove Policy</button>
+      </div>
+      <pre class="output" id="out-7b"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Step 3: Test timeout (httpbin delays 10s, policy times out at 5s)</div>
+        <button class="btn primary" onclick="runAction('/api/test-timeout', 'out-7c', 'POST')">Call httpbin /delay/10</button>
+      </div>
+      <pre class="output" id="out-7c"></pre>
+
+      <details class="deep-dive">
+        <summary>Deep dive: VirtualService vs HTTPRoute for traffic policy</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">Two ways to configure traffic policy:</strong><br><br>
+            <strong style="color:#3fb950;">VirtualService</strong> (Istio-native API)<br>
+            &nbsp;&nbsp;Retries, timeouts, fault injection, traffic splitting<br>
+            &nbsp;&nbsp;Mature, full-featured, widely documented<br>
+            &nbsp;&nbsp;Applied via the waypoint proxy (Envoy)<br><br>
+            <strong style="color:#3fb950;">HTTPRoute</strong> (Gateway API standard)<br>
+            &nbsp;&nbsp;Newer K8s-native approach<br>
+            &nbsp;&nbsp;Retry filters and timeouts are being added to the spec<br>
+            &nbsp;&nbsp;Gateway API is the long-term direction<br><br>
+            <span style="color:#d29922;">Both work through the waypoint. VirtualService is more<br>
+            feature-complete today. Gateway API is the future standard.</span>
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
+  <!-- Part 8: Multi-Cluster -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="section-number">8</span>
       <span class="section-title">Multi-Cluster Trust</span>
       <span class="section-time">2 min</span>
     </div>

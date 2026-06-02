@@ -11,21 +11,24 @@ End-to-end mTLS, customer-managed certificates, and traffic policy for Red Hat O
 
 ---
 
-### Slide 2: The Problem
+### Slide 2: RHOAI Already Uses Service Mesh
 
-**RHOAI 3.4 has no east-west security**
+**RHOAI 3.4 uses Service Mesh 3 for Gateway API ingress**
 
-- Embedded Istio is gateway-only — no pod-to-pod encryption
-- Even with `enable-auth: true`, only server-side TLS (kube-rbac-proxy) — no mutual auth
-- No workload identity (SPIFFE) — pods can't prove who they are
-- No east-west encryption between pods
-- Cannot bring your own CA or federate across clusters
+- North-south traffic routing and OAuth authentication out of the box
+- Transaction path: Route → Gateway → Envoy → kube-auth-proxy → HTTPRoute → backend
+- For most deployments, this is sufficient
 
-| | Auth Off | Auth On | Gap |
-|---|---|---|---|
-| Router → Pod | Plain HTTP ❌ | TLS (server only) ⚠️ | No mutual auth |
-| Workload Identity | None ❌ | None ❌ | No SPIFFE |
-| Pod → Pod | Unencrypted ❌ | Unencrypted ❌ | No east-west |
+**For regulated environments, we extend it with ambient mesh:**
+
+| Capability | RHOAI Alone | RHOAI + Mesh |
+|---|---|---|
+| Ingress TLS | Yes | Yes (custom CA) |
+| Mutual authentication | No | **Yes (mTLS)** |
+| Workload identity | No | **Yes (SPIFFE)** |
+| East-west encryption | No | **Yes (ztunnel)** |
+| Customer-managed CA | No | **Yes (cert-manager)** |
+| L7 authorization policy | No | **Yes (waypoint)** |
 
 ---
 
@@ -33,11 +36,11 @@ End-to-end mTLS, customer-managed certificates, and traffic policy for Red Hat O
 
 **Identity-based security that follows the workload**
 
-- **Data plane**: Transparent proxies intercept all pod traffic (ztunnel in ambient mode — no sidecars)
-- **Control plane**: istiod manages config, distributes certs, enforces policy
-- **mTLS**: Every connection mutually authenticated — both sides prove identity
-- **SPIFFE**: Workload identity standard — `spiffe://cluster.local/ns/demo/sa/default`
-- **Zero-trust**: No implicit trust from network location — every hop verified
+- **Data plane**: ztunnel (Rust, per-node) handles L4 mTLS transparently — no sidecars
+- **Control plane**: istiod manages config via xDS, distributes SPIFFE certs
+- **Waypoint proxies**: Envoy (opt-in, per-namespace) for L7 policy — AuthZ, retries, timeouts
+- **SPIFFE**: Workload identity — `spiffe://cluster.local/ns/super-slim-demo/sa/default`
+- **Zero-trust**: STRICT PeerAuthentication — every hop mutually authenticated
 
 ---
 
@@ -45,45 +48,46 @@ End-to-end mTLS, customer-managed certificates, and traffic policy for Red Hat O
 
 **Layer on top of RHOAI — zero application changes**
 
-- **Ambient mode**: No sidecars — ztunnel DaemonSet handles L4 mTLS per node
-- **Waypoint proxies**: Opt-in L7 policy (AuthZ, retries, rate limits)
-- **Mesh gateway**: North-south entry point with custom CA cert
-- **Coexists** with RHOAI's embedded Istio — dashboard and notebooks unaffected
+- Enrollment = two namespace labels
+- Apps serve plain HTTP internally — ztunnel encrypts on the wire
+- Coexists with RHOAI's embedded Istio — dashboard and notebooks unaffected
+- Mesh gateway for north-south model traffic with custom CA cert
 
-*(Architecture diagram: Client → OCP Router → Mesh Gateway → mTLS → Model Pod)*
+*(Architecture diagram: Client → OCP Router → Mesh Gateway → ztunnel mTLS → Model Pod)*
 
 ---
 
-### Slide 5: Security at Every Layer
+### Slide 5: Customer-Controlled Certificates
 
-**In-Cluster** — ztunnel automatic L4 mTLS, HBONE tunnels, PeerAuthentication STRICT
+**One CA chain controls everything**
 
-**External Access** — Mesh gateway terminates TLS with custom CA cert, HBONE mTLS to backends
+```
+Customer Root CA (cert-manager, 10yr)  ← shared across clusters
+     └─► Intermediate CA (5yr)          ← unique per cluster
+           ├─► Gateway TLS cert (90d)   [cert-manager auto-renews]
+           └─► Istio cacerts secret     [istiod signs SPIFFE certs, 24h auto-rotation]
+```
 
-**Cross-Cluster** — Same root CA on multiple clusters = cross-cluster mTLS (next phase)
+- Bring your own root CA — swap with corporate PKI
+- cert-manager handles lifecycle — zero manual rotation
+- Optional: Zero Trust Workload Identity Manager (SPIRE) for centralized governance
 
-| Hop | Before | After |
-|-----|--------|-------|
+---
+
+### Slide 6: Security at Every Layer
+
+**In-Cluster** — ztunnel automatic L4 mTLS, HBONE tunnels, STRICT PeerAuthentication
+
+**External** — Mesh gateway terminates TLS with custom CA cert, HBONE mTLS to backends
+
+**Authorization** — Waypoint proxy enforces L7 policy based on SPIFFE identity
+
+| Hop | RHOAI Alone | RHOAI + Mesh |
+|-----|-------------|-------------|
 | Client → Gateway | TLS | Custom CA TLS |
-| Gateway → Model Pod | Plain HTTP | HBONE mTLS |
-| Pod → Pod | None | HBONE mTLS |
-
----
-
-### Slide 6: Certificate Management
-
-**One customer-controlled CA chain for everything**
-
-```
-Customer Root CA (cert-manager, 10yr)
-     └─► Intermediate CA (5yr)
-           ├─► Gateway TLS cert (90d, auto-renewed)
-           └─► Istio cacerts → SPIFFE workload certs (24h, auto-rotated)
-```
-
-- Bring your own root CA — replace with corporate PKI
-- cert-manager handles full lifecycle — zero manual rotation
-- Same root CA across clusters = multi-cluster trust
+| Gateway → Model | Depends on config | HBONE mTLS |
+| Pod → Pod | Not encrypted | HBONE mTLS |
+| Access control | Network-based | Identity-based (SPIFFE) |
 
 ---
 
@@ -94,35 +98,28 @@ Customer Root CA (cert-manager, 10yr)
 | Layer | Provided by | Capabilities |
 |-------|------------|-------------|
 | L4 (always on) | ztunnel | mTLS, connection load balancing, TCP metrics |
-| L7 (opt-in) | waypoint proxy | AuthorizationPolicy, retries, timeouts, rate limits, request routing |
+| L7 (opt-in) | waypoint proxy | AuthorizationPolicy, retries, timeouts, rate limits |
 
-```yaml
-# Example: Only the mesh gateway can call the model
-apiVersion: security.istio.io/v1
-kind: AuthorizationPolicy
-spec:
-  targetRefs:
-    - kind: Service
-      name: iris-onnx-predictor
-  action: ALLOW
-  rules:
-    - from:
-        - source:
-            principals:
-              - "cluster.local/ns/istio-system/sa/mesh-gateway-istio"
-```
+**Demo: retry policy**
+- Without retries: 503 error reaches the client
+- With retries: waypoint retries 3x on 5xx errors automatically
+- Timeout: 10s delay cut to 5s — client gets fast failure, not infinite wait
+- One VirtualService YAML — the app needs no retry logic
 
 ---
 
 ### Slide 8: Demo
 
-1. Show RHOAI's gateway-only Istio (the gap)
-2. Ambient mesh enrollment (namespace labels, ztunnel interception)
-3. Custom CA chain (cert-manager → openssl verify)
-4. Inference through mesh gateway (curl with `--cacert`)
-5. mTLS proof (ztunnel SPIFFE identities in access logs)
-6. AuthorizationPolicy (restrict model access, show 403)
-7. Kiali topology view
+*(Live demo via interactive console — http://localhost:3000)*
+
+1. **Live inference** — run model, show mTLS proof with SPIFFE identities
+2. **Why it matters** — RHOAI gateway baseline + what mesh adds
+3. **How it works** — ztunnel, iptables interception, namespace labels
+4. **Certificates** — CA chain, cacerts secret, SPIFFE lifecycle, live cert
+5. **Zero trust** — with cert, without cert, bypass (all rejected)
+6. **Authorization** — apply policy, gateway allowed, test-client blocked
+7. **Traffic management** — retries, timeouts
+8. **Multi-cluster** — shared root CA fingerprints, roadmap
 
 ---
 
@@ -134,14 +131,18 @@ spec:
 | No app changes | Ambient mode — transparent, no sidecars |
 | Customer-controlled trust | Bring your own CA — all certs chain to your root |
 | Compliance | Encryption in transit at every layer, auditable access logs |
-| Multi-cluster ready | Shared root CA enables cross-cluster federation |
+| Traffic resilience | Retries, timeouts, circuit breaking via waypoint |
 | Defense in depth | L7 AuthorizationPolicy restricts service-to-service access |
 | Operational simplicity | cert-manager + Istio handle full cert lifecycle |
+| Multi-cluster ready | Shared root CA — cross-cluster trust in OSSM 3.4 |
 
 ---
 
 ### Slide 10: What's Next
 
-- **Multi-cluster federation** — shared root CA, cross-cluster service discovery, east-west gateways
-- **Production hardening** — External Secrets for CA keys, NetworkPolicy + AuthorizationPolicy layering
+- **Ambient multi-cluster** — cross-cluster mTLS routing in OSSM 3.4 (Istio 1.29 Beta)
+  - Trust infrastructure already in place (shared root CA)
+  - Version upgrade, not a rebuild
+- **BackendTLSPolicy** — OCP Gateway natively connects to mesh backends (OCP 4.22)
+- **Production hardening** — External Secrets for CA keys, defense in depth with NetworkPolicy + AuthorizationPolicy
 - **Additional workloads** — model registry, pipelines, training jobs enrolled in mesh
