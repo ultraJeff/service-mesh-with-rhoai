@@ -230,6 +230,60 @@
           </div>
         </div>
       </details>
+
+      <details class="deep-dive">
+        <summary>Deep dive: How does sidecar mesh work? (and why ambient is different)</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">Sidecar mode (traditional Istio / OSSM 2.x):</strong><br><br>
+            &nbsp;&nbsp;Every pod gets an Envoy proxy container <strong>injected</strong> alongside<br>
+            &nbsp;&nbsp;the application container. The two containers share a network<br>
+            &nbsp;&nbsp;namespace. All inbound and outbound traffic goes through Envoy.<br><br>
+            &nbsp;&nbsp;<span style="color:#c9d1d9;">
+            &nbsp;&nbsp;┌─────────────────────────────┐<br>
+            &nbsp;&nbsp;│ Pod                         │<br>
+            &nbsp;&nbsp;│  ┌──────────┐ ┌───────────┐ │<br>
+            &nbsp;&nbsp;│  │ App      │ │ Envoy     │ │<br>
+            &nbsp;&nbsp;│  │ container│ │ (sidecar) │ │<br>
+            &nbsp;&nbsp;│  └────┬─────┘ └─────┬─────┘ │<br>
+            &nbsp;&nbsp;│       └──────┬──────┘       │<br>
+            &nbsp;&nbsp;│        shared network       │<br>
+            &nbsp;&nbsp;└─────────────────────────────┘<br>
+            </span><br>
+            &nbsp;&nbsp;Pros: Full L7 on every connection (retries, routing, AuthZ)<br>
+            &nbsp;&nbsp;Cons: Extra CPU/memory per pod, sidecar injection required,<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pods must restart to add/remove the sidecar<br><br>
+            <strong style="color:#58a6ff;">Ambient mode (OSSM 3.x):</strong><br><br>
+            &nbsp;&nbsp;No sidecar. ztunnel runs per-node (DaemonSet) and handles<br>
+            &nbsp;&nbsp;L4 mTLS for all enrolled pods transparently. Envoy only<br>
+            &nbsp;&nbsp;appears as waypoint proxies (opt-in, per-namespace) for L7.<br><br>
+            &nbsp;&nbsp;<span style="color:#c9d1d9;">
+            &nbsp;&nbsp;┌──────────────┐    ┌──────────────┐<br>
+            &nbsp;&nbsp;│ Pod A        │    │ Pod B        │<br>
+            &nbsp;&nbsp;│ (app only,   │    │ (app only,   │<br>
+            &nbsp;&nbsp;│  no sidecar) │    │  no sidecar) │<br>
+            &nbsp;&nbsp;└──────┬───────┘    └──────┬───────┘<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│iptables&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│iptables<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼<br>
+            &nbsp;&nbsp;┌──────────────────────────────────┐<br>
+            &nbsp;&nbsp;│ ztunnel (shared, per-node)       │<br>
+            &nbsp;&nbsp;│ handles mTLS for all pods        │<br>
+            &nbsp;&nbsp;└──────────────────────────────────┘<br>
+            </span><br>
+            &nbsp;&nbsp;Pros: No per-pod overhead, no injection, no restarts,<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enrollment is a namespace label<br>
+            &nbsp;&nbsp;Cons: L7 requires deploying a waypoint proxy<br><br>
+            <strong style="color:#58a6ff;">Why this matters for RHOAI features like llm-d:</strong><br><br>
+            &nbsp;&nbsp;Some RHOAI capabilities may use sidecar injection for<br>
+            &nbsp;&nbsp;specific features (e.g., traffic splitting between model<br>
+            &nbsp;&nbsp;versions, request routing based on headers). Sidecar and<br>
+            &nbsp;&nbsp;ambient can <strong>coexist in the same mesh</strong> &mdash; some namespaces<br>
+            &nbsp;&nbsp;use ambient (label-based enrollment), others use sidecar<br>
+            &nbsp;&nbsp;injection. They share the same Istio control plane and<br>
+            &nbsp;&nbsp;the same CA trust chain.
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
