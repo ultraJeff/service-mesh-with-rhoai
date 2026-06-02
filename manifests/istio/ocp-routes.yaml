@@ -2,6 +2,9 @@
 # The OCP Router uses SNI to match hostnames and passes raw TLS
 # through to the mesh gateway, which terminates it using the
 # custom CA-signed cert. Clients see the custom cert chain.
+#
+# NOTE: Update the host fields to match your cluster's domain.
+# Get the domain with: oc get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}'
 ---
 apiVersion: route.openshift.io/v1
 kind: Route
@@ -9,23 +12,8 @@ metadata:
   name: mesh-gateway-iris
   namespace: istio-system
 spec:
-  host: iris-onnx.apps.tallgeese.ultra.lab
-  port:
-    targetPort: https
-  tls:
-    termination: passthrough
-  to:
-    kind: Service
-    name: mesh-gateway-istio
-    weight: 100
----
-apiVersion: route.openshift.io/v1
-kind: Route
-metadata:
-  name: mesh-gateway-phi4
-  namespace: istio-system
-spec:
-  host: phi-4-mini.apps.tallgeese.ultra.lab
+  # UPDATE: host: iris-onnx.<your-cluster-domain>
+  host: iris-onnx.apps.example.com
   port:
     targetPort: https
   tls:

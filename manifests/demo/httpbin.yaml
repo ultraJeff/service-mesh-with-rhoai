@@ -1,0 +1,39 @@
+# httpbin app for traffic management demos (retries, timeouts).
+# Useful endpoints:
+#   /get          - returns request info
+#   /status/503   - returns 503 (simulate failure)
+#   /delay/N      - delays response by N seconds
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: httpbin
+  namespace: super-slim-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: httpbin
+  template:
+    metadata:
+      labels:
+        app: httpbin
+    spec:
+      containers:
+        - name: httpbin
+          image: mccutchen/go-httpbin:v2.15.0
+          ports:
+            - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: httpbin
+  namespace: super-slim-demo
+spec:
+  selector:
+    app: httpbin
+  ports:
+    - port: 80
+      targetPort: 8080
+      name: http

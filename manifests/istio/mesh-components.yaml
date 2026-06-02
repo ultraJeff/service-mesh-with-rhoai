@@ -1,0 +1,53 @@
+# Core ambient mesh components.
+# The Istio CR, IstioCNI, and ZTunnel deploy istiod, istio-cni DaemonSet,
+# and ztunnel DaemonSet respectively.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-system
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: istio-cni
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ztunnel
+  labels:
+    istio.io/ztunnel-namespace: "true"
+---
+apiVersion: sailoperator.io/v1
+kind: Istio
+metadata:
+  name: default
+spec:
+  namespace: istio-system
+  profile: ambient
+  updateStrategy:
+    type: InPlace
+  values:
+    pilot:
+      trustedZtunnelNamespace: "ztunnel"
+---
+apiVersion: sailoperator.io/v1
+kind: IstioCNI
+metadata:
+  name: default
+spec:
+  namespace: istio-cni
+  values:
+    cni:
+      ambient:
+        reconcileIptablesOnStartup: true
+  profile: ambient
+---
+apiVersion: sailoperator.io/v1alpha1
+kind: ZTunnel
+metadata:
+  name: default
+spec:
+  namespace: ztunnel
+  profile: ambient

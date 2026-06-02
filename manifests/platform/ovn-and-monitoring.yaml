@@ -1,0 +1,24 @@
+# Platform prerequisites for ambient mesh on OpenShift.
+# Apply BEFORE deploying the mesh.
+---
+# Required: enables host routing for kubelet health probes with ztunnel.
+# Without this, TCP probes get stuck in SYN-RECV.
+apiVersion: operator.openshift.io/v1
+kind: Network
+metadata:
+  name: cluster
+spec:
+  defaultNetwork:
+    ovnKubernetesConfig:
+      gatewayConfig:
+        routingViaHost: true
+---
+# Required: enables Prometheus scraping of user-namespace PodMonitors/ServiceMonitors.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-monitoring-config
+  namespace: openshift-monitoring
+data:
+  config.yaml: |
+    enableUserWorkload: true

@@ -1,0 +1,17 @@
+# Mesh-internal Service for iris-onnx.
+# Routes mesh gateway traffic to the kserve container on port 8080,
+# bypassing the kube-rbac-proxy (port 8443) which handles RHOAI auth.
+# Both Services coexist — enable-auth and mesh are complementary.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: iris-onnx-mesh
+  namespace: super-slim-demo
+spec:
+  selector:
+    app: isvc.iris-onnx-predictor
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

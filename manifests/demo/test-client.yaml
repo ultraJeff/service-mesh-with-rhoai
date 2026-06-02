@@ -1,0 +1,21 @@
+# Curl pod for testing pod-to-pod connectivity and AuthorizationPolicy.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-client
+  namespace: super-slim-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test-client
+  template:
+    metadata:
+      labels:
+        app: test-client
+    spec:
+      containers:
+        - name: curl
+          image: curlimages/curl
+          command: ["sleep", "infinity"]
