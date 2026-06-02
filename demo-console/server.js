@@ -519,6 +519,43 @@ fi`);
   res.json({ output: result.output, exitCode: code === '200' ? 0 : 1 });
 });
 
+// --- Part 5b: Audit Trail ---
+
+app.get('/api/audit', async (req, res) => {
+  const logsResult = await run("oc logs -n ztunnel -l app=ztunnel --since=5m 2>/dev/null | grep access | grep -v prometheus | grep -v metrics | tail -10");
+  const lines = logsResult.output.trim().split('\n').filter(function(l) { return l.trim(); });
+  var output = 'Mesh audit trail -- every connection logged with identity:\n\n';
+  lines.forEach(function(line) {
+    var tsMatch = line.match(/(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})/);
+    var ts = tsMatch ? tsMatch[1] : '?';
+    var fields = {};
+    var m;
+    var re1 = /(\w[\w.]+)="([^"]*)"/g;
+    while ((m = re1.exec(line)) !== null) { fields[m[1]] = m[2]; }
+    var re2 = /\b(bytes_sent|bytes_recv|duration)=(\d+\w*)/g;
+    while ((m = re2.exec(line)) !== null) { if (!fields[m[1]]) fields[m[1]] = m[2]; }
+    if (Object.keys(fields).length === 0) return;
+    var srcId = fields['src.identity'] || 'unknown';
+    var dstSvc = (fields['dst.service'] || '?').split('.')[0];
+    var dstNs = fields['dst.namespace'] || '?';
+    var sent = fields['bytes_sent'] || '?';
+    var recv = fields['bytes_recv'] || '?';
+    var dur = fields['duration'] || '?';
+    var err = fields['error'] || '';
+    var status = err ? 'DENIED' : 'OK   ';
+    output += ts + '  ' + status + '  ' + srcId + '\n';
+    output += '              > ' + dstSvc + '.' + dstNs + '  (' + sent + 'B sent, ' + recv + 'B recv, ' + dur + ')\n';
+    if (err) output += '              reason: ' + err + '\n';
+    output += '\n';
+  });
+  if (lines.length === 0) output += '  (no recent traffic -- run inference first)\n\n';
+  output += 'Every mTLS connection is logged with SPIFFE identity, destination,\n';
+  output += 'timestamp, bytes transferred, and duration. Denied connections\n';
+  output += 'show the rejection reason. This is an audit trail for compliance --\n';
+  output += 'no agent to install, no app instrumentation needed.';
+  res.json({ output: output, exitCode: 0 });
+});
+
 // --- Part 6b: Traffic Management (retries, timeouts) ---
 
 app.post('/api/test-503', async (req, res) => {

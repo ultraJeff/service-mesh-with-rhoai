@@ -359,6 +359,11 @@
         <button class="btn danger" onclick="runAction('/api/test-bypass', 'out-5c', 'POST')">Try Direct Access</button>
       </div>
       <pre class="output" id="out-5c"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Audit trail (every connection logged with identity)</div>
+        <button class="btn" onclick="runAction('/api/audit', 'out-5d')">Show Audit Trail</button>
+      </div>
+      <pre class="output" id="out-5d"></pre>
 
       <details class="deep-dive">
         <summary>Deep dive: PeerAuthentication</summary>
