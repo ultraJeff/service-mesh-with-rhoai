@@ -757,8 +757,6 @@ OSSM 3.4 (Istio 1.29)  Beta           connectivity and stability fixes</pre>
             <strong style="color:#58a6ff;">What doesn't work yet:</strong><br><br>
             &nbsp;&nbsp;&bull; ztunnel cross-network data plane routing<br>
             &nbsp;&nbsp;&nbsp;&nbsp;(traffic goes to local ClusterIP, not through E/W gateway)<br>
-            &nbsp;&nbsp;&bull; VirtualService retries not applied to waypoint Envoy<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;(timeouts work, retries do not appear in Envoy config)<br>
             &nbsp;&nbsp;&bull; <code>clusterName</code> must be set on both Istio CR AND ZTunnel CR<br>
             &nbsp;&nbsp;&nbsp;&nbsp;(path: <code>values.ztunnel.multiCluster.clusterName</code>)<br><br>
             <strong style="color:#58a6ff;">Infrastructure requirement:</strong><br><br>
