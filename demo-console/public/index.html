@@ -263,6 +263,15 @@
             &nbsp;&nbsp;istiod pushes updates via xDS over gRPC. When something<br>
             &nbsp;&nbsp;changes (new HTTPRoute, new pod, rotated cert), Envoy<br>
             &nbsp;&nbsp;applies it live — no restart needed.<br><br>
+            <strong style="color:#58a6ff;">How do network layers work together?</strong><br>
+            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">L7 (HTTP request)      ← waypoint sees this (optional)
+L4 (TCP connection)    ← ztunnel encrypts this (always)
+L3 (IP routing)        ← Kubernetes CNI handles this
+L2 (Ethernet frames)   ← physical/virtual network</pre>
+            &nbsp;&nbsp;The layers are a stack, not alternatives. L7 rides on<br>
+            &nbsp;&nbsp;top of L4. You can't have an HTTP request without a TCP<br>
+            &nbsp;&nbsp;connection underneath. When the waypoint handles L7,<br>
+            &nbsp;&nbsp;ztunnel is still handling L4 mTLS on both hops.<br><br>
             <strong style="color:#58a6ff;">What is HBONE?</strong><br>
             &nbsp;&nbsp;HTTP-Based Overlay Network Encapsulation.<br>
             &nbsp;&nbsp;An HTTP/2 CONNECT tunnel with mTLS on port 15008.<br>
@@ -285,15 +294,20 @@
             &nbsp;&nbsp;Every pod gets an Envoy proxy container <strong>injected</strong> alongside<br>
             &nbsp;&nbsp;the application container. The two containers share a network<br>
             &nbsp;&nbsp;namespace. All inbound and outbound traffic goes through Envoy.<br><br>
-            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">┌───────────────────────────────┐
-│ Pod                           │
-│ ┌───────────┐ ┌─────────────┐ │
-│ │ App       │ │ Envoy       │ │
-│ │ container │ │ (sidecar)   │ │
-│ └─────┬─────┘ └──────┬──────┘ │
-│       └───────┬───────┘       │
-│        shared network         │
-└───────────────────────────────┘</pre>
+            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">Pod A (node 1)                      Pod B (node 2)
+┌───────────────────┐               ┌───────────────────┐
+│ App ←→ Envoy      │               │ Envoy ←→ App      │
+│   (localhost,      │               │   (localhost,      │
+│    shared netns)   │               │    shared netns)   │
+└────────┬──────────┘               └────────┬──────────┘
+         │                                   │
+         └────── mTLS (direct TLS) ──────────┘
+              regular pod network (CNI)
+              no special mesh network</pre>
+            &nbsp;&nbsp;In sidecar mode, Envoy does the mTLS directly — it holds<br>
+            &nbsp;&nbsp;the SPIFFE cert and does the TLS handshake over the normal<br>
+            &nbsp;&nbsp;pod network (OVN, Calico, whatever CNI is installed).<br>
+            &nbsp;&nbsp;No special network, no HBONE — just TLS on the existing wires.<br>
             &nbsp;&nbsp;Pros: Full L7 on every connection (retries, routing, AuthZ)<br>
             &nbsp;&nbsp;Cons: Extra CPU/memory per pod, sidecar injection required,<br>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pods must restart to add/remove the sidecar<br><br>
