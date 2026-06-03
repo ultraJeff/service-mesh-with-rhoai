@@ -4,7 +4,7 @@ const path = require('path');
 
 const app = express();
 const PORT = 3000;
-const TIMEOUT = 15000;
+const TIMEOUT = 30000;
 let DOMAIN = 'apps.example.com';
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -740,21 +740,28 @@ echo 'Different intermediate CAs, same root = federated trust.'`);
 // --- Part 8: Observability ---
 
 app.post('/api/generate-traffic', async (req, res) => {
-  const result = await run(`echo 'Sending 20 requests to iris-onnx through the mesh gateway...'
+  const result = await run(`echo 'Sending requests to iris-onnx (external) and httpbin (internal)...'
 echo ''
+echo 'iris-onnx (via mesh gateway):'
 PASS=0; FAIL=0
-for i in $(seq 1 20); do
+for i in $(seq 1 10); do
   CODE=$(curl --cacert /tmp/mesh-root-ca.pem -s -o /dev/null -w '%{http_code}' --connect-timeout 5 https://iris-onnx.${DOMAIN}/v2/models/iris-onnx 2>/dev/null)
   if [ "$CODE" = "200" ]; then PASS=$((PASS+1)); printf "."; else FAIL=$((FAIL+1)); printf "X"; fi
-  sleep 0.5
+  sleep 0.3
 done
-echo ""
-echo ""
-echo "$PASS succeeded, $FAIL failed"
-echo ""
-echo "Check Kiali graph now — select super-slim-demo namespace."
-echo "You should see traffic from mesh-gateway-istio to iris-onnx-mesh."`);
-  res.json(result);
+echo "  $PASS/$((PASS+FAIL))"
+echo ''
+echo 'httpbin (pod-to-pod via waypoint):'
+PASS2=0; FAIL2=0
+for i in $(seq 1 10); do
+  CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://httpbin.super-slim-demo.svc/get 2>/dev/null)
+  if [ "$CODE" = "200" ]; then PASS2=$((PASS2+1)); printf "."; else FAIL2=$((FAIL2+1)); printf "X"; fi
+done
+echo "  $PASS2/$((PASS2+FAIL2))"
+echo ''
+echo 'Check Kiali graph now — select super-slim-demo namespace.'
+echo 'You should see: mesh-gateway → iris-onnx-mesh, test-client → httpbin'`);
+  res.json({ output: result.output, exitCode: 0 });
 });
 
 // --- Part 9: Mesh Resources ---
