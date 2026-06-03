@@ -126,9 +126,23 @@ Make sure you're on the RHOAI context: `oc config use-context rhoai`
 
 ---
 
-## Part 8: Multi-Cluster Trust (2 min)
+## Part 8: Observability (2 min)
 
 **Click section 8.**
+
+"Let's see this in Kiali."
+
+1. Click **Generate Traffic (iris + httpbin)** — "This sends 10 requests to the model through the mesh gateway, and 5 to httpbin's unstable endpoint through the waypoint. Some will fail — that's intentional."
+
+2. Click **Kiali Dashboard** — "Here's the mesh topology. You can see the mesh gateway routing to iris-onnx, the test client going through the waypoint to httpbin, and the error rate on the unstable endpoint. Every connection shows mTLS status."
+
+3. Click **OCP Console → Service Mesh** — "Same view integrated into the OpenShift console via the OSSMConsole plugin."
+
+---
+
+## Part 9: Multi-Cluster Trust (2 min)
+
+**Click section 9.**
 
 "Two clusters, one root CA."
 

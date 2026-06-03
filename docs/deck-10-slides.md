@@ -114,12 +114,13 @@ Customer Root CA (cert-manager, 10yr)  ← shared across clusters
 
 1. **Live inference** — run model, show mTLS proof with SPIFFE identities
 2. **Why it matters** — RHOAI gateway baseline + what mesh adds
-3. **How it works** — ztunnel, iptables interception, namespace labels
+3. **How it works** — ztunnel, namespace labels, pod startup flow
 4. **Certificates** — CA chain, cacerts secret, SPIFFE lifecycle, live cert
-5. **Zero trust** — with cert, without cert, bypass (all rejected)
+5. **Zero trust** — with cert, without cert, bypass, audit trail
 6. **Authorization** — apply policy, gateway allowed, test-client blocked
-7. **Traffic management** — retries, timeouts
-8. **Multi-cluster** — shared root CA fingerprints, roadmap
+7. **Timeouts** — before/after timeout enforcement
+8. **Observability** — generate traffic, Kiali topology with error rates
+9. **Multi-cluster** — shared root CA fingerprints, roadmap
 
 ---
 

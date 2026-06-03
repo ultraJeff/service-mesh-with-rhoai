@@ -50,7 +50,11 @@ Simulate 503 failure (client sees error), apply retry+timeout policy, test timeo
 
 **Key talking point:** "The app doesn't need retry logic. One YAML and the mesh handles it."
 
-## Part 8: Multi-Cluster (2 min) — Forward-Looking
+## Part 8: Observability (2 min) — Visual
+
+Generate traffic to both iris-onnx and httpbin, then show Kiali topology graph with traffic flow and error rates. Open OSSMConsole in OCP web console.
+
+## Part 9: Multi-Cluster (2 min) — Forward-Looking
 
 Compare root CA fingerprints (identical across clusters), compare gateway cert chains (different intermediates, same root). Show status: trust ready, cross-cluster routing in OSSM 3.4.
 
