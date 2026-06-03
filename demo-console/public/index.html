@@ -180,6 +180,57 @@
       <pre class="output" id="out-3c"></pre>
 
       <details class="deep-dive">
+        <summary>Deep dive: What happens when a pod starts in the mesh?</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">Pod startup flow (6 steps):</strong><br><br>
+            <strong>1.</strong> Pod created in an ambient-enrolled namespace<br><br>
+            <strong>2.</strong> <strong style="color:#3fb950;">istio-cni</strong> (DaemonSet on the node) detects the new pod<br>
+            &nbsp;&nbsp;istio-cni watches the kubelet for pod events on its node<br><br>
+            <strong>3.</strong> istio-cni enters the pod's <strong>network namespace</strong> using <code>nsenter</code><br>
+            &nbsp;&nbsp;and injects iptables rules that redirect all traffic to ztunnel:<br><br>
+            &nbsp;&nbsp;<span style="color:#8b949e;">
+            &nbsp;&nbsp;# Equivalent to:<br>
+            &nbsp;&nbsp;nsenter --net=/proc/&lt;pod-pid&gt;/ns/net iptables -t nat ...<br>
+            &nbsp;&nbsp;<br>
+            &nbsp;&nbsp;# Rules injected:<br>
+            &nbsp;&nbsp;PREROUTING: redirect inbound TCP &rarr; ztunnel port 15006<br>
+            &nbsp;&nbsp;OUTPUT:     redirect outbound TCP &rarr; ztunnel port 15001<br>
+            &nbsp;&nbsp;PREROUTING: exempt kubelet probes (169.254.7.127) &rarr; ACCEPT<br>
+            </span><br>
+            &nbsp;&nbsp;The pod has no sidecar, no extra container. istio-cni reaches<br>
+            &nbsp;&nbsp;<em>into</em> the pod's network namespace from outside (it runs as a<br>
+            &nbsp;&nbsp;privileged DaemonSet with access to <code>/proc</code>). The pod never<br>
+            &nbsp;&nbsp;knows it happened.<br><br>
+            <strong>4.</strong> <strong style="color:#3fb950;">ztunnel</strong> (DaemonSet on the node) starts handling traffic<br>
+            &nbsp;&nbsp;for this pod. It's already listening on ports 15006/15001<br>
+            &nbsp;&nbsp;and can access all pod network namespaces on the node.<br><br>
+            <strong>5.</strong> ztunnel requests a <strong>SPIFFE certificate</strong> from istiod<br>
+            &nbsp;&nbsp;for this pod's identity (namespace + service account).<br>
+            &nbsp;&nbsp;istiod validates via K8s TokenReview, signs the cert with<br>
+            &nbsp;&nbsp;the intermediate CA, and returns it.<br><br>
+            <strong>6.</strong> Traffic flows:<br>
+            &nbsp;&nbsp;app &rarr; iptables redirect &rarr; ztunnel &rarr; HBONE mTLS &rarr;<br>
+            &nbsp;&nbsp;remote ztunnel &rarr; destination app<br><br>
+            <strong style="color:#58a6ff;">What is a network namespace?</strong><br><br>
+            &nbsp;&nbsp;A Linux kernel feature that gives a process its own isolated<br>
+            &nbsp;&nbsp;network stack — interfaces, IPs, routing tables, iptables, ports.<br>
+            &nbsp;&nbsp;Every pod in Kubernetes gets one. That's why two pods can both<br>
+            &nbsp;&nbsp;listen on port 8080 without conflicting.<br><br>
+            &nbsp;&nbsp;When ztunnel and the app "share a network namespace," traffic<br>
+            &nbsp;&nbsp;between them is like two processes on localhost — it never<br>
+            &nbsp;&nbsp;touches a physical interface. Traffic <em>between</em> pods crosses<br>
+            &nbsp;&nbsp;namespace boundaries and goes over the network — that's what<br>
+            &nbsp;&nbsp;ztunnel encrypts.<br><br>
+            <span style="color:#d29922;">Think of it as: istio-cni is the plumber that connects the pipes.<br>
+            ztunnel is the water treatment plant that all the pipes flow<br>
+            through. Neither lives in your house (pod) — they're shared<br>
+            infrastructure on each block (node).</span>
+          </div>
+        </div>
+      </details>
+
+      <details class="deep-dive">
         <summary>Deep dive: ztunnel vs Envoy in ambient mesh</summary>
         <div class="deep-dive-content">
           <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
