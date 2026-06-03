@@ -642,6 +642,43 @@ Pod B (receives HTTP)</pre>
           </div>
         </div>
       </details>
+
+      <details class="deep-dive">
+        <summary>Deep dive: Waypoint security — what the proxy can see</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">The waypoint sees the full HTTP stream.</strong><br><br>
+            &nbsp;&nbsp;When traffic flows through the waypoint, ztunnel decrypts<br>
+            &nbsp;&nbsp;the HBONE tunnel and delivers the raw HTTP to Envoy.<br>
+            &nbsp;&nbsp;Envoy sees:<br><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; HTTP headers (path, method, content-type)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; HTTP body (inference inputs, model predictions)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; All request/response data in memory<br><br>
+            &nbsp;&nbsp;Most policies only <em>need</em> headers (AuthZ matches on<br>
+            &nbsp;&nbsp;identity/path, retries match on status codes), but the<br>
+            &nbsp;&nbsp;body is in Envoy's memory as it proxies the request.<br><br>
+            <strong style="color:#58a6ff;">Do models always need a waypoint?</strong><br>
+            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">What you need                          Waypoint?
+─────────────────────────────────────  ─────────
+mTLS encryption only                   No
+Identity-based access (L4 AuthZ)       No — ztunnel can do this
+Path/method-based AuthZ                Yes — body visible
+Retries on transient failures          Yes — body visible
+Timeouts                               Yes — body visible</pre>
+            <strong style="color:#58a6ff;">If the body is sensitive:</strong><br><br>
+            &nbsp;&nbsp;<strong style="color:#3fb950;">Option 1:</strong> Skip the waypoint. Use L4-only (ztunnel mTLS +<br>
+            &nbsp;&nbsp;identity-based AuthZ). No decryption points, but no L7 features.<br><br>
+            &nbsp;&nbsp;<strong style="color:#3fb950;">Option 2:</strong> Accept the waypoint. It's Istio-managed infrastructure,<br>
+            &nbsp;&nbsp;protected by RBAC, auditable. Same trust level as ztunnel.<br><br>
+            &nbsp;&nbsp;<strong style="color:#3fb950;">Option 3:</strong> App-level encryption on top (<code>enable-auth</code> or native TLS).<br>
+            &nbsp;&nbsp;The waypoint can still route and retry based on headers, but the<br>
+            &nbsp;&nbsp;body is encrypted by the app — the waypoint can't read it.<br><br>
+            <span style="color:#d29922;">This is the same trade-off as sidecar mode — every sidecar sees<br>
+            decrypted traffic. In ambient, the waypoint centralizes that<br>
+            exposure to one pod per namespace instead of one per pod.</span>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
@@ -722,6 +759,11 @@ Pod B (receives HTTP)</pre>
   <div class="status-card">
     <h3>AuthorizationPolicy</h3>
     <div id="status-authz"><span class="status-dot yellow"></span>Loading...</div>
+  </div>
+
+  <div class="status-card">
+    <h3>Retry Policy</h3>
+    <div id="status-retry"><span class="status-dot yellow"></span>Loading...</div>
   </div>
 
   <h2 style="margin-top:20px;">SNO Cluster</h2>

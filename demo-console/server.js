@@ -36,6 +36,12 @@ app.get('/api/health', async (req, res) => {
   res.json({ nodes: nodes.output, mesh: mesh.output, pods: pods.output });
 });
 
+app.get('/api/retry-policy/status', async (req, res) => {
+  const result = await run('oc get virtualservice httpbin-retries -n super-slim-demo --no-headers 2>/dev/null');
+  const active = result.output.trim().length > 0 && result.exitCode === 0;
+  res.json({ active, output: result.output || 'No retry policy applied' });
+});
+
 app.get('/api/authz-policy/status', async (req, res) => {
   const result = await run('oc get authorizationpolicy -n super-slim-demo --no-headers 2>/dev/null');
   const active = result.output.trim().length > 0 && result.exitCode === 0;

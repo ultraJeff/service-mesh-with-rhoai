@@ -52,6 +52,10 @@ async function refreshStatus() {
     const policyActive = authz.active;
     document.getElementById('status-authz').innerHTML =
       `<span class="status-dot ${policyActive ? 'yellow' : 'green'}"></span>${policyActive ? 'ACTIVE (restricting access)' : 'None (open access)'}`;
+
+    const retry = await (await fetch('/api/retry-policy/status')).json();
+    document.getElementById('status-retry').innerHTML =
+      `<span class="status-dot ${retry.active ? 'yellow' : 'green'}"></span>${retry.active ? 'ACTIVE (retries + timeout)' : 'None'}`;
   } catch (e) {
     document.getElementById('status-nodes').innerHTML =
       `<span class="status-dot red"></span>API unreachable`;
