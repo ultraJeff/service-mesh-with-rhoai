@@ -37,6 +37,6 @@ spec:
     matchLabels:
       gateway.networking.k8s.io/gateway-name: mesh-waypoint
   podMetricsEndpoints:
-    - port: status-port
+    - port: http-envoy-prom
       path: /stats/prometheus
       interval: 15s
