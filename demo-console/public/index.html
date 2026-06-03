@@ -603,24 +603,24 @@ Pod B (receives HTTP)</pre>
     <div class="section-body">
       <div class="talking-point">
         Beyond security: the waypoint proxy handles <strong>traffic resilience</strong>.
-        Retries, timeouts, and circuit breaking &mdash; all configured declaratively.
-        The application doesn't need retry logic; the mesh handles it.
+        Timeouts, retries, circuit breaking &mdash; all configured declaratively.
+        The application doesn't need this logic; the mesh handles it.
       </div>
       <div class="action-group">
-        <div class="action-group-label">Step 1: Simulate a failure (no retry policy)</div>
-        <button class="btn danger" onclick="runAction('/api/test-503', 'out-7a', 'POST')">Call httpbin /status/503</button>
+        <div class="action-group-label">Step 1: Call a slow service (no timeout policy)</div>
+        <button class="btn primary" onclick="runAction('/api/test-timeout', 'out-7a', 'POST')">Call httpbin /delay/10 (no policy)</button>
       </div>
       <pre class="output" id="out-7a"></pre>
       <div class="action-group">
-        <div class="action-group-label">Step 2: Apply retry + timeout policy</div>
-        <button class="btn success" onclick="runAction('/api/retry-policy/apply', 'out-7b', 'POST')">Apply Retry Policy</button>
+        <div class="action-group-label">Step 2: Apply timeout policy</div>
+        <button class="btn success" onclick="runAction('/api/retry-policy/apply', 'out-7b', 'POST')">Apply Timeout Policy</button>
         <button class="btn" onclick="runAction('/api/retry-policy/explain', 'out-7b')">What does this policy say?</button>
         <button class="btn danger" onclick="runAction('/api/retry-policy/delete', 'out-7b', 'POST')">Remove Policy</button>
       </div>
       <pre class="output" id="out-7b"></pre>
       <div class="action-group">
-        <div class="action-group-label">Step 3: Test timeout (httpbin delays 10s, policy times out at 5s)</div>
-        <button class="btn primary" onclick="runAction('/api/test-timeout', 'out-7c', 'POST')">Call httpbin /delay/10</button>
+        <div class="action-group-label">Step 3: Call the same service (policy enforces 5s timeout)</div>
+        <button class="btn primary" onclick="runAction('/api/test-timeout', 'out-7c', 'POST')">Call httpbin /delay/10 (with policy)</button>
       </div>
       <pre class="output" id="out-7c"></pre>
 

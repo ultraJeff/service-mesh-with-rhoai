@@ -571,17 +571,22 @@ app.get('/api/audit', async (req, res) => {
 
 // --- Part 6b: Traffic Management (retries, timeouts) ---
 
-app.post('/api/test-503', async (req, res) => {
-  const result = await run(`echo '$ curl http://httpbin.super-slim-demo.svc/status/503'
-echo '  (httpbin returns a 503 error — simulating a transient failure)'
+app.post('/api/test-unstable', async (req, res) => {
+  const result = await run(`echo '$ curl http://httpbin/unstable  (x10)'
+echo '  (httpbin fails ~50% of the time — simulating flaky service)'
 echo ''
-CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://httpbin.super-slim-demo.svc/status/503 2>/dev/null)
-echo "Result: HTTP $CODE"
-echo ''
-if [ "$CODE" = "503" ]; then
-  echo "The request failed. Without retries, the client sees the error."
+PASS=0; FAIL=0
+for i in $(seq 1 10); do
+  CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://httpbin.super-slim-demo.svc/unstable 2>/dev/null)
+  if [ "$CODE" = "200" ]; then PASS=$((PASS+1)); printf "."; else FAIL=$((FAIL+1)); printf "X"; fi
+done
+echo ""
+echo ""
+echo "Results: $PASS succeeded, $FAIL failed"
+if [ "$FAIL" -gt 0 ]; then
+  echo "The client sees the failures directly."
 else
-  echo "Unexpected result — retry policy may already be active."
+  echo "All passed — retries may be absorbing failures behind the scenes."
 fi`);
   res.json(result);
 });
@@ -604,7 +609,8 @@ spec:
               number: 80
       retries:
         attempts: 3
-        retryOn: 5xx
+        retryOn: 5xx,reset,connect-failure,retriable-status-codes
+        retryRemoteLocalities: true
       timeout: 5s
 ENDOFPOLICY`);
   res.json(result);
