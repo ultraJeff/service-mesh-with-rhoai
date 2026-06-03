@@ -682,10 +682,35 @@ Timeouts                               Yes — body visible</pre>
     </div>
   </div>
 
-  <!-- Part 8: Multi-Cluster -->
+  <!-- Part 8: Observability -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
       <span class="section-number">8</span>
+      <span class="section-title">Observability</span>
+      <span class="section-time">2 min</span>
+    </div>
+    <div class="section-body">
+      <div class="talking-point">
+        Kiali provides the mesh topology view &mdash; traffic flow, mTLS status,
+        and workload health. Let's generate some traffic and see it live.
+      </div>
+      <div class="action-group">
+        <div class="action-group-label">Generate traffic for Kiali</div>
+        <button class="btn primary" onclick="runAction('/api/generate-traffic', 'out-8a', 'POST')">Send 20 Requests to Iris Model</button>
+      </div>
+      <pre class="output" id="out-8a"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Open dashboards</div>
+        <a class="link-btn" id="link-kiali" href="#" target="_blank">Kiali Dashboard</a>
+        <a class="link-btn" id="link-console" href="#" target="_blank">OCP Console &rarr; Service Mesh</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Part 9: Multi-Cluster -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="section-number">9</span>
       <span class="section-title">Multi-Cluster Trust</span>
       <span class="section-time">2 min</span>
     </div>
@@ -699,27 +724,55 @@ Timeouts                               Yes — body visible</pre>
       </div>
       <div class="action-group">
         <div class="action-group-label">Shared trust (same root CA = cross-cluster identity verification)</div>
-        <button class="btn primary" onclick="runAction('/api/multi-cluster-verify', 'out-8a')">Compare Root CA Fingerprints</button>
-        <button class="btn" onclick="runAction('/api/multi-cluster-certs', 'out-8a')">Compare Gateway Cert Chains</button>
+        <button class="btn primary" onclick="runAction('/api/multi-cluster-verify', 'out-9a')">Compare Root CA Fingerprints</button>
+        <button class="btn" onclick="runAction('/api/multi-cluster-certs', 'out-9a')">Compare Gateway Cert Chains</button>
       </div>
-      <pre class="output" id="out-8a"></pre>
+      <pre class="output" id="out-9a"></pre>
       <div class="action-group">
         <div class="action-group-label">Federation status and roadmap</div>
-        <button class="btn primary" onclick="runAction('/api/multi-cluster-status', 'out-8b')">Show Multi-Cluster Status</button>
+        <button class="btn primary" onclick="runAction('/api/multi-cluster-status', 'out-9b')">Show Multi-Cluster Status</button>
       </div>
-      <pre class="output" id="out-8b"></pre>
-      <div class="action-group">
-        <div class="action-group-label">Observability</div>
-        <a class="link-btn" id="link-kiali" href="#" target="_blank">Kiali Dashboard</a>
-        <a class="link-btn" id="link-console" href="#" target="_blank">OCP Console</a>
-      </div>
+      <pre class="output" id="out-9b"></pre>
+
+      <details class="deep-dive">
+        <summary>Deep dive: State of ambient multi-cluster (OSSM 3.3 / Istio 1.28)</summary>
+        <div class="deep-dive-content">
+          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
+            <strong style="color:#58a6ff;">Maturity timeline:</strong><br>
+            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">OSSM 3.2 (Istio 1.27)  Dev Preview    ztunnel VIP format broke all traffic
+OSSM 3.3 (Istio 1.28)  Tech Preview   control plane works, data plane incomplete
+OSSM 3.4 (Istio 1.29)  Beta           connectivity fixes, production-ready</pre>
+            <strong style="color:#58a6ff;">What works in OSSM 3.3:</strong><br><br>
+            &nbsp;&nbsp;&bull; Shared root CA across clusters (what we demonstrated)<br>
+            &nbsp;&nbsp;&bull; Per-cluster intermediate CAs via cert-manager<br>
+            &nbsp;&nbsp;&bull; <code>AMBIENT_ENABLE_MULTI_NETWORK=true</code> creates the<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;<code>istio-east-west</code> GatewayClass<br>
+            &nbsp;&nbsp;&bull; Remote secrets for cross-cluster service discovery<br>
+            &nbsp;&nbsp;&bull; istiod sees remote endpoints (confirmed via debug API)<br><br>
+            <strong style="color:#58a6ff;">What doesn't work yet:</strong><br><br>
+            &nbsp;&nbsp;&bull; ztunnel cross-network data plane routing<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;(traffic goes to local ClusterIP, not through E/W gateway)<br>
+            &nbsp;&nbsp;&bull; VirtualService config not applied to waypoint Envoy<br>
+            &nbsp;&nbsp;&bull; <code>clusterName</code> must be set on both Istio CR AND ZTunnel CR<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;(path: <code>values.ztunnel.multiCluster.clusterName</code>)<br><br>
+            <strong style="color:#58a6ff;">Infrastructure requirement:</strong><br><br>
+            &nbsp;&nbsp;East-west gateways need <strong>L4 exposure</strong> (MetalLB or<br>
+            &nbsp;&nbsp;cloud LoadBalancer). OCP Routes are L7 (HAProxy) and<br>
+            &nbsp;&nbsp;break the HBONE/mTLS passthrough. Do not use Routes<br>
+            &nbsp;&nbsp;for east-west gateways.<br><br>
+            <span style="color:#d29922;">Confirmed by Red Hat engineering (Jamie Longmuir):<br>
+            ambient multi-cluster is Tech Preview in OSSM 3.3,<br>
+            targeting at least partial GA later in 2026.</span>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 
-  <!-- Part 9: Mesh Resources -->
+  <!-- Part 10: Mesh Resources -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
-      <span class="section-number">9</span>
+      <span class="section-number">10</span>
       <span class="section-title">Bonus: All Mesh Resources</span>
       <span class="section-time">reference</span>
     </div>

@@ -737,6 +737,26 @@ echo 'Different intermediate CAs, same root = federated trust.'`);
   res.json(result);
 });
 
+// --- Part 8: Observability ---
+
+app.post('/api/generate-traffic', async (req, res) => {
+  const result = await run(`echo 'Sending 20 requests to iris-onnx through the mesh gateway...'
+echo ''
+PASS=0; FAIL=0
+for i in $(seq 1 20); do
+  CODE=$(curl --cacert /tmp/mesh-root-ca.pem -s -o /dev/null -w '%{http_code}' --connect-timeout 5 https://iris-onnx.${DOMAIN}/v2/models/iris-onnx 2>/dev/null)
+  if [ "$CODE" = "200" ]; then PASS=$((PASS+1)); printf "."; else FAIL=$((FAIL+1)); printf "X"; fi
+  sleep 0.5
+done
+echo ""
+echo ""
+echo "$PASS succeeded, $FAIL failed"
+echo ""
+echo "Check Kiali graph now — select super-slim-demo namespace."
+echo "You should see traffic from mesh-gateway-istio to iris-onnx-mesh."`);
+  res.json(result);
+});
+
 // --- Part 9: Mesh Resources ---
 
 app.get('/api/mesh-resources', async (req, res) => {
