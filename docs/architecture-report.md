@@ -31,7 +31,7 @@ RHOAI offers two modes for exposing InferenceServices, controlled by the `securi
 
 Even with `enable-auth: true`, the TLS is **server-side only** — no mutual authentication, no workload identity (SPIFFE), and no east-west encryption between pods.
 
-### Full TLS Gap Table
+### Full TLS Coverage Table
 
 | Traffic Hop | Dashboard | Model (`auth: false`) | Model (`auth: true`) | Notebooks |
 |-------------|-----------|----------------------|---------------------|-----------|
@@ -41,7 +41,7 @@ Even with `enable-auth: true`, the TLS is **server-side only** — no mutual aut
 | Workload identity (SPIFFE) | No | No | No | No |
 | Pod → Pod (east-west) | **None** | **None** | **None** | **None** |
 
-**What's missing regardless of auth mode:** mutual authentication (both sides prove identity), workload identity (SPIFFE SVIDs), and east-west encryption between pods.
+**What the mesh adds regardless of auth mode:** mutual authentication (both sides prove identity), workload identity (SPIFFE SVIDs), and east-west encryption between pods.
 
 ## Solution: Ambient Mesh with Custom CA and Mesh Gateway
 
@@ -276,7 +276,7 @@ The ztunnel intercepts traffic using iptables rules injected into each pod's net
 
 ### 4. Mesh Gateway: North-South with Custom CA
 
-The mesh gateway terminates external TLS using a cert signed by the custom CA chain, then routes to backend pods via HBONE mTLS. This closes the north-south encryption gap that existed with direct OCP Routes:
+The mesh gateway terminates external TLS using a cert signed by the custom CA chain, then routes to backend pods via HBONE mTLS. This adds mTLS to the north-south path, complementing the existing OCP Routes:
 
 | | Before (OCP Route) | After (Mesh Gateway) |
 |---|---|---|

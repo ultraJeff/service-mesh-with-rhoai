@@ -21,14 +21,14 @@ End-to-end mTLS, customer-managed certificates, and traffic policy for Red Hat O
 
 **For regulated environments, we extend it with ambient mesh:**
 
-| Capability | RHOAI Alone | RHOAI + Mesh |
-|---|---|---|
-| Ingress TLS | Yes | Yes (custom CA) |
-| Mutual authentication | No | **Yes (mTLS)** |
-| Workload identity | No | **Yes (SPIFFE)** |
-| East-west encryption | No | **Yes (ztunnel)** |
-| Customer-managed CA | No | **Yes (cert-manager)** |
-| L7 authorization policy | No | **Yes (waypoint)** |
+| Service Mesh Capability | What it does |
+|---|---|
+| Mutual authentication (mTLS) | Both sides of every connection prove their identity |
+| Workload identity (SPIFFE) | Every pod gets a cryptographic identity |
+| East-west encryption | All pod-to-pod traffic encrypted via ztunnel |
+| L7 authorization policy | Control which workloads can call which services |
+| Traffic resilience | Retries, timeouts, circuit breaking — no app changes |
+| Observability | Topology, metrics, tracing via Kiali |
 
 ---
 
@@ -82,12 +82,12 @@ Customer Root CA (cert-manager, 10yr)  ← shared across clusters
 
 **Authorization** — Waypoint proxy enforces L7 policy based on SPIFFE identity
 
-| Hop | RHOAI Alone | RHOAI + Mesh |
-|-----|-------------|-------------|
-| Client → Gateway | TLS | Custom CA TLS |
-| Gateway → Model | Depends on config | HBONE mTLS |
-| Pod → Pod | Not encrypted | HBONE mTLS |
-| Access control | Network-based | Identity-based (SPIFFE) |
+| Hop | With Mesh |
+|-----|-----------|
+| Client → Gateway | Custom CA TLS (cert-manager managed) |
+| Gateway → Model | HBONE mTLS (SPIFFE identity) |
+| Pod → Pod | HBONE mTLS (automatic, transparent) |
+| Access control | Identity-based (AuthorizationPolicy) |
 
 ---
 
