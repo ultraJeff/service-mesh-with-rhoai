@@ -693,6 +693,35 @@ echo "other's SPIFFE identity. Cross-cluster mTLS is possible."`);
   res.json(result);
 });
 
+app.get('/api/multi-cluster-discovery', async (req, res) => {
+  const result = await run(`echo 'Cross-cluster endpoint discovery (from RHOAI istiod):'
+echo ''
+oc --context rhoai exec -n istio-system deploy/istiod -- pilot-discovery request GET /debug/endpointShardz 2>/dev/null | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+interesting = ['demo-app', 'istio-system', 'super-slim-demo']
+for svc, data in d.items():
+    for ns, sharddata in data.items():
+        shards = sharddata.get('Shards', {})
+        for shard, eps in shards.items():
+            if 'sno' in shard and any(ns in svc for ns in interesting):
+                print(f'  {svc}')
+                print(f'    shard: {shard}  endpoints: {len(eps)}')
+                for ep in eps[:1]:
+                    net = ep.get('Labels',{}).get('topology.istio.io/network','?')
+                    print(f'    network: {net}')
+                print()
+" 2>/dev/null
+FOUND=$(oc --context rhoai exec -n istio-system deploy/istiod -- pilot-discovery request GET /debug/endpointShardz 2>/dev/null | grep -c "sno" 2>/dev/null)
+if [ "$FOUND" -gt 0 ]; then
+  echo "istiod on the RHOAI cluster sees SNO services."
+  echo "The control plane knows about remote endpoints."
+else
+  echo "(no remote endpoints found — remote secret may need refresh)"
+fi`);
+  res.json(result);
+});
+
 app.get('/api/multi-cluster-status', async (req, res) => {
   const result = await run(`echo 'Multi-cluster federation status:'
 echo ''

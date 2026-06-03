@@ -729,10 +729,15 @@ Timeouts                               Yes — body visible</pre>
       </div>
       <pre class="output" id="out-9a"></pre>
       <div class="action-group">
-        <div class="action-group-label">Federation status and roadmap</div>
-        <button class="btn primary" onclick="runAction('/api/multi-cluster-status', 'out-9b')">Show Multi-Cluster Status</button>
+        <div class="action-group-label">Cross-cluster service discovery (istiod sees remote endpoints)</div>
+        <button class="btn" onclick="runAction('/api/multi-cluster-discovery', 'out-9b')">Show Remote Endpoints</button>
       </div>
       <pre class="output" id="out-9b"></pre>
+      <div class="action-group">
+        <div class="action-group-label">Federation status and roadmap</div>
+        <button class="btn primary" onclick="runAction('/api/multi-cluster-status', 'out-9c')">Show Multi-Cluster Status</button>
+      </div>
+      <pre class="output" id="out-9c"></pre>
 
       <details class="deep-dive">
         <summary>Deep dive: State of ambient multi-cluster (OSSM 3.3 / Istio 1.28)</summary>
@@ -741,7 +746,7 @@ Timeouts                               Yes — body visible</pre>
             <strong style="color:#58a6ff;">Maturity timeline:</strong><br>
             <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">OSSM 3.2 (Istio 1.27)  Dev Preview    ztunnel VIP format broke all traffic
 OSSM 3.3 (Istio 1.28)  Tech Preview   control plane works, data plane incomplete
-OSSM 3.4 (Istio 1.29)  Beta           connectivity fixes, production-ready</pre>
+OSSM 3.4 (Istio 1.29)  Beta           connectivity and stability fixes</pre>
             <strong style="color:#58a6ff;">What works in OSSM 3.3:</strong><br><br>
             &nbsp;&nbsp;&bull; Shared root CA across clusters (what we demonstrated)<br>
             &nbsp;&nbsp;&bull; Per-cluster intermediate CAs via cert-manager<br>
@@ -752,7 +757,8 @@ OSSM 3.4 (Istio 1.29)  Beta           connectivity fixes, production-ready</pre>
             <strong style="color:#58a6ff;">What doesn't work yet:</strong><br><br>
             &nbsp;&nbsp;&bull; ztunnel cross-network data plane routing<br>
             &nbsp;&nbsp;&nbsp;&nbsp;(traffic goes to local ClusterIP, not through E/W gateway)<br>
-            &nbsp;&nbsp;&bull; VirtualService config not applied to waypoint Envoy<br>
+            &nbsp;&nbsp;&bull; VirtualService retries not applied to waypoint Envoy<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;(timeouts work, retries do not appear in Envoy config)<br>
             &nbsp;&nbsp;&bull; <code>clusterName</code> must be set on both Istio CR AND ZTunnel CR<br>
             &nbsp;&nbsp;&nbsp;&nbsp;(path: <code>values.ztunnel.multiCluster.clusterName</code>)<br><br>
             <strong style="color:#58a6ff;">Infrastructure requirement:</strong><br><br>
@@ -760,9 +766,9 @@ OSSM 3.4 (Istio 1.29)  Beta           connectivity fixes, production-ready</pre>
             &nbsp;&nbsp;cloud LoadBalancer). OCP Routes are L7 (HAProxy) and<br>
             &nbsp;&nbsp;break the HBONE/mTLS passthrough. Do not use Routes<br>
             &nbsp;&nbsp;for east-west gateways.<br><br>
-            <span style="color:#d29922;">Confirmed by Red Hat engineering (Jamie Longmuir):<br>
-            ambient multi-cluster is Tech Preview in OSSM 3.3,<br>
-            targeting at least partial GA later in 2026.</span>
+            <span style="color:#d29922;">Ambient multi-cluster is Tech Preview in OSSM 3.3.<br>
+            Follow upstream Istio and OSSM release notes for<br>
+            updates on GA timeline.</span>
           </div>
         </div>
       </details>
