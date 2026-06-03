@@ -69,15 +69,15 @@
       </div>
 
       <div style="background:#1c2129; border-radius:6px; padding:14px; margin-bottom:12px; font-size:13px; line-height:1.7;">
-        <strong style="color:#58a6ff;">What the service mesh adds:</strong><br>
+        <strong style="color:#58a6ff;">Service mesh capabilities:</strong><br>
         <table style="width:100%; margin-top:8px; font-size:12px; border-collapse:collapse;">
-          <tr style="color:#8b949e;"><td style="padding:4px 8px;">Capability</td><td style="padding:4px 8px;">RHOAI Alone</td><td style="padding:4px 8px;">RHOAI + Mesh</td></tr>
-          <tr><td style="padding:4px 8px;">Ingress TLS</td><td style="padding:4px 8px; color:#3fb950;">Yes</td><td style="padding:4px 8px; color:#3fb950;">Yes (custom CA)</td></tr>
-          <tr><td style="padding:4px 8px;">Mutual authentication</td><td style="padding:4px 8px; color:#8b949e;">No</td><td style="padding:4px 8px; color:#3fb950;"><strong>Yes (mTLS)</strong></td></tr>
-          <tr><td style="padding:4px 8px;">Workload identity</td><td style="padding:4px 8px; color:#8b949e;">No</td><td style="padding:4px 8px; color:#3fb950;"><strong>Yes (SPIFFE)</strong></td></tr>
-          <tr><td style="padding:4px 8px;">East-west encryption</td><td style="padding:4px 8px; color:#8b949e;">No</td><td style="padding:4px 8px; color:#3fb950;"><strong>Yes (ztunnel)</strong></td></tr>
-          <tr><td style="padding:4px 8px;">Customer-managed CA</td><td style="padding:4px 8px; color:#8b949e;">No</td><td style="padding:4px 8px; color:#3fb950;"><strong>Yes (cert-manager)</strong></td></tr>
-          <tr><td style="padding:4px 8px;">L7 authorization policy</td><td style="padding:4px 8px; color:#8b949e;">No</td><td style="padding:4px 8px; color:#3fb950;"><strong>Yes (waypoint)</strong></td></tr>
+          <tr style="color:#8b949e;"><td style="padding:4px 8px;">Capability</td><td style="padding:4px 8px;">What it does</td></tr>
+          <tr><td style="padding:4px 8px; color:#3fb950;">Mutual authentication (mTLS)</td><td style="padding:4px 8px;">Both sides of every connection prove their identity</td></tr>
+          <tr><td style="padding:4px 8px; color:#3fb950;">Workload identity (SPIFFE)</td><td style="padding:4px 8px;">Every pod gets a cryptographic identity based on its service account</td></tr>
+          <tr><td style="padding:4px 8px; color:#3fb950;">East-west encryption</td><td style="padding:4px 8px;">All pod-to-pod traffic encrypted transparently via ztunnel</td></tr>
+          <tr><td style="padding:4px 8px; color:#3fb950;">L7 authorization policy</td><td style="padding:4px 8px;">Control which workloads can call which services, by identity</td></tr>
+          <tr><td style="padding:4px 8px; color:#3fb950;">Traffic resilience</td><td style="padding:4px 8px;">Retries, timeouts, circuit breaking &mdash; no app changes</td></tr>
+          <tr><td style="padding:4px 8px; color:#3fb950;">Observability</td><td style="padding:4px 8px;">Topology visualization, metrics, distributed tracing via Kiali</td></tr>
         </table>
       </div>
       <div class="action-group">
@@ -90,7 +90,7 @@
         <summary>Deep dive: BackendTLSPolicy (coming in OCP 4.22+)</summary>
         <div class="deep-dive-content">
           <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
-            <strong style="color:#58a6ff;">The gap today:</strong><br>
+            <strong style="color:#58a6ff;">The integration challenge today:</strong><br>
             &nbsp;&nbsp;The RHOAI gateway (OCP Gateway API) and our ambient mesh<br>
             &nbsp;&nbsp;are two separate Istio control planes. The OCP gateway<br>
             &nbsp;&nbsp;cannot speak mTLS to mesh-enrolled backends because they<br>

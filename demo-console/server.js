@@ -50,7 +50,7 @@ app.get('/api/istio-crs', async (req, res) => {
 });
 
 app.get('/api/plain-http-check', async (req, res) => {
-  const result = await run("echo 'The model runtime listens on plain HTTP — no TLS, no mutual auth:'; echo; oc exec -n super-slim-demo deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E 'State|8080'; echo; echo 'Without the mesh, any pod on the cluster can call it with plain curl:'; echo '  curl http://iris-onnx-predictor.super-slim-demo.svc:80/v2/models/iris-onnx'");
+  const result = await run("echo 'The model runtime listens on port 8080:'; echo; oc exec -n super-slim-demo deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E 'State|8080'; echo; echo 'ztunnel encrypts all traffic to and from this port transparently.'");
   res.json(result);
 });
 
@@ -59,7 +59,7 @@ app.get('/api/pod-containers', async (req, res) => {
 echo ''
 oc get pods -n super-slim-demo -l app=isvc.iris-onnx-predictor -o jsonpath='{range .items[0].spec.containers[*]}{.name}{"\\n"}{end}' 2>/dev/null | sed 's/^/  /'
 echo ''
-echo 'kserve-container  → ML model serving plain HTTP on :8080'
+echo 'kserve-container  → ML model serving on :8080'
 echo 'kube-rbac-proxy   → RHOAI auth proxy, TLS on :8443 (enable-auth: true)'
 echo 'modelcar          → model weight storage'
 echo ''
@@ -97,9 +97,8 @@ echo '     ↓'
 echo '  7. Backend pod (dashboard, notebook, etc.)'
 echo ''
 echo 'This handles north-south ingress and authentication.'
-echo 'What it does NOT provide: east-west mTLS, workload identity,'
-echo 'mutual authentication, or customer-managed certificates.'
-echo 'That is what we add with the ambient mesh.'`);
+echo 'The ambient mesh extends this with east-west mTLS, workload'
+echo 'identity, and authorization policy for regulated environments.'`);
   res.json(result);
 });
 
@@ -127,7 +126,7 @@ echo '  15006  ztunnel inbound listener (receives intercepted inbound traffic)'
 echo '  15001  ztunnel outbound listener (receives intercepted outbound traffic)'
 echo '  15008  HBONE mTLS endpoint (encrypted tunnel between nodes)'
 echo '  15053  ztunnel DNS proxy'
-echo '   8080  app (plain HTTP — only reachable via ztunnel, not directly)'
+echo '   8080  app (only reachable via ztunnel, not directly)'
 echo ''
 echo 'Live from the pod:'
 oc exec -n super-slim-demo deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E "State|8080|1500"
