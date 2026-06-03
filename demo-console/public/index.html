@@ -671,6 +671,26 @@ Pod B (receives HTTP)</pre>
     </div>
   </div>
 
+  <!-- Part 9: Mesh Resources -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="section-number">9</span>
+      <span class="section-title">Bonus: All Mesh Resources</span>
+      <span class="section-time">reference</span>
+    </div>
+    <div class="section-body">
+      <div class="talking-point">
+        Every custom resource that makes this mesh work &mdash; control plane, gateways,
+        security policies, certificates, and observability.
+      </div>
+      <div class="action-group">
+        <div class="action-group-label">List all mesh CRs on this cluster</div>
+        <button class="btn primary" onclick="runAction('/api/mesh-resources', 'out-9a')">Show Mesh Resources</button>
+      </div>
+      <pre class="output" id="out-9a"></pre>
+    </div>
+  </div>
+
 </div>
 
 <div id="sidebar">

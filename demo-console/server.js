@@ -719,6 +719,43 @@ echo 'Different intermediate CAs, same root = federated trust.'`);
   res.json(result);
 });
 
+// --- Part 9: Mesh Resources ---
+
+app.get('/api/mesh-resources', async (req, res) => {
+  const result = await run(`echo 'Mesh custom resources on this cluster:'
+echo ''
+echo '=== Control Plane ==='
+oc get istio -A -o custom-columns='NAME:.metadata.name,NS:.spec.namespace,STATUS:.status.state,VERSION:.spec.version' --no-headers 2>/dev/null | awk '{printf "  Istio/%s  namespace=%s  status=%s  version=%s\\n", $1, $2, $3, $4}'
+oc get istiocni -A -o custom-columns='NAME:.metadata.name,STATUS:.status.state' --no-headers 2>/dev/null | awk '{printf "  IstioCNI/%s  status=%s\\n", $1, $2}'
+oc get ztunnel -A -o custom-columns='NAME:.metadata.name,STATUS:.status.state' --no-headers 2>/dev/null | awk '{printf "  ZTunnel/%s  status=%s\\n", $1, $2}'
+echo ''
+echo '=== Gateway API ==='
+oc get gateway -A --no-headers 2>/dev/null | awk '{printf "  Gateway/%s  namespace=%s  class=%s\\n", $2, $1, $3}'
+oc get httproute -A --no-headers 2>/dev/null | awk '{printf "  HTTPRoute/%s  namespace=%s\\n", $2, $1}'
+oc get gatewayclass --no-headers 2>/dev/null | awk '{printf "  GatewayClass/%s  controller=%s\\n", $1, $2}'
+echo ''
+echo '=== Security ==='
+oc get peerauthentication -A --no-headers 2>/dev/null | awk '{printf "  PeerAuthentication/%s  namespace=%s  mode=%s\\n", $2, $1, $3}'
+oc get authorizationpolicy -A --no-headers 2>/dev/null | awk '{printf "  AuthorizationPolicy/%s  namespace=%s\\n", $2, $1}' 2>/dev/null
+if [ $(oc get authorizationpolicy -A --no-headers 2>/dev/null | wc -l) -eq 0 ]; then echo '  (none active)'; fi
+echo ''
+echo '=== Certificates ==='
+oc get certificate -n istio-system --no-headers 2>/dev/null | awk '{printf "  Certificate/%s  ready=%s\\n", $1, $2}'
+oc get issuer -n istio-system --no-headers 2>/dev/null | awk '{printf "  Issuer/%s  ready=%s\\n", $1, $2}'
+oc get clusterissuer --no-headers 2>/dev/null | grep mesh | awk '{printf "  ClusterIssuer/%s  ready=%s\\n", $1, $2}'
+echo ''
+echo '=== Networking ==='
+oc get virtualservice -A --no-headers 2>/dev/null | awk '{printf "  VirtualService/%s  namespace=%s\\n", $2, $1}'
+if [ $(oc get virtualservice -A --no-headers 2>/dev/null | wc -l) -eq 0 ]; then echo '  (none active)'; fi
+echo ''
+echo '=== Observability ==='
+oc get kiali -A --no-headers 2>/dev/null | awk '{printf "  Kiali/%s  namespace=%s\\n", $2, $1}'
+oc get ossmconsole -A --no-headers 2>/dev/null | awk '{printf "  OSSMConsole/%s  namespace=%s\\n", $2, $1}'
+oc get podmonitor -A --no-headers 2>/dev/null | grep -iE "ztunnel|istiod|waypoint" | awk '{printf "  PodMonitor/%s  namespace=%s\\n", $2, $1}'
+oc get servicemonitor -A --no-headers 2>/dev/null | grep -iE "istiod" | awk '{printf "  ServiceMonitor/%s  namespace=%s\\n", $2, $1}'`);
+  res.json(result);
+});
+
 exec("oc get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null", (err, stdout) => {
   if (stdout && stdout.trim()) DOMAIN = stdout.trim().replace(/'/g, '');
   console.log(`Cluster domain: ${DOMAIN}`);
