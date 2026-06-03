@@ -574,11 +574,19 @@ ztunnel (node B)
   │
   ▼
 Pod B (receives HTTP)</pre>
-            <span style="color:#d29922;">Envoy never does mTLS — ztunnel handles encryption<br>
-            on both hops. Envoy only sees plain HTTP and makes<br>
-            L7 decisions. This is why <code>mesh-waypoint</code> must be<br>
-            in the AuthorizationPolicy allow list — it's the<br>
-            source identity that Pod B's ztunnel sees on hop 2.</span>
+            <span style="color:#d29922;">In ambient mode, ztunnel handles mTLS on both hops.<br>
+            The waypoint receives already-decrypted traffic and<br>
+            makes L7 decisions. (In sidecar mode, Envoy handles<br>
+            mTLS directly — but that's not the case here.)<br>
+            <br>
+            <code>mesh-waypoint</code> must be in the AuthorizationPolicy<br>
+            allow list because it's the source identity that<br>
+            Pod B's ztunnel sees on hop 2.<br>
+            <br>
+            All traffic to a waypoint-labeled namespace goes<br>
+            through the waypoint — the routing decision is based<br>
+            on namespace/service labels, not traffic content.<br>
+            ztunnel doesn't inspect L4 vs L7; it checks labels.</span>
           </div>
         </div>
       </details>
