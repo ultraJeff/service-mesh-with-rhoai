@@ -169,15 +169,10 @@
       </div>
       <pre class="output" id="out-3a"></pre>
       <div class="action-group">
-        <div class="action-group-label">How does ztunnel intercept traffic?</div>
-        <button class="btn" onclick="runAction('/api/iptables-rules', 'out-3b')">Show iptables Rules (inside model pod)</button>
+        <div class="action-group-label">Enrollment = two labels</div>
+        <button class="btn primary" onclick="runAction('/api/namespace-labels', 'out-3b')">Show Namespace Labels</button>
       </div>
       <pre class="output" id="out-3b"></pre>
-      <div class="action-group">
-        <div class="action-group-label">Enrollment = two labels</div>
-        <button class="btn primary" onclick="runAction('/api/namespace-labels', 'out-3c')">Show Namespace Labels</button>
-      </div>
-      <pre class="output" id="out-3c"></pre>
 
       <details class="deep-dive">
         <summary>Deep dive: What happens when a pod starts in the mesh?</summary>
