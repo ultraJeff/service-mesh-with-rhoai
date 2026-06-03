@@ -285,17 +285,15 @@
             &nbsp;&nbsp;Every pod gets an Envoy proxy container <strong>injected</strong> alongside<br>
             &nbsp;&nbsp;the application container. The two containers share a network<br>
             &nbsp;&nbsp;namespace. All inbound and outbound traffic goes through Envoy.<br><br>
-            &nbsp;&nbsp;<span style="color:#c9d1d9;">
-            &nbsp;&nbsp;┌─────────────────────────────┐<br>
-            &nbsp;&nbsp;│ Pod                         │<br>
-            &nbsp;&nbsp;│  ┌──────────┐ ┌───────────┐ │<br>
-            &nbsp;&nbsp;│  │ App      │ │ Envoy     │ │<br>
-            &nbsp;&nbsp;│  │ container│ │ (sidecar) │ │<br>
-            &nbsp;&nbsp;│  └────┬─────┘ └─────┬─────┘ │<br>
-            &nbsp;&nbsp;│       └──────┬──────┘       │<br>
-            &nbsp;&nbsp;│        shared network       │<br>
-            &nbsp;&nbsp;└─────────────────────────────┘<br>
-            </span><br>
+            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">┌───────────────────────────────┐
+│ Pod                           │
+│ ┌───────────┐ ┌─────────────┐ │
+│ │ App       │ │ Envoy       │ │
+│ │ container │ │ (sidecar)   │ │
+│ └─────┬─────┘ └──────┬──────┘ │
+│       └───────┬───────┘       │
+│        shared network         │
+└───────────────────────────────┘</pre>
             &nbsp;&nbsp;Pros: Full L7 on every connection (retries, routing, AuthZ)<br>
             &nbsp;&nbsp;Cons: Extra CPU/memory per pod, sidecar injection required,<br>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;pods must restart to add/remove the sidecar<br><br>
@@ -303,19 +301,17 @@
             &nbsp;&nbsp;No sidecar. ztunnel runs per-node (DaemonSet) and handles<br>
             &nbsp;&nbsp;L4 mTLS for all enrolled pods transparently. Envoy only<br>
             &nbsp;&nbsp;appears as waypoint proxies (opt-in, per-namespace) for L7.<br><br>
-            &nbsp;&nbsp;<span style="color:#c9d1d9;">
-            &nbsp;&nbsp;┌──────────────┐    ┌──────────────┐<br>
-            &nbsp;&nbsp;│ Pod A        │    │ Pod B        │<br>
-            &nbsp;&nbsp;│ (app only,   │    │ (app only,   │<br>
-            &nbsp;&nbsp;│  no sidecar) │    │  no sidecar) │<br>
-            &nbsp;&nbsp;└──────┬───────┘    └──────┬───────┘<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│iptables&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;│iptables<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;▼<br>
-            &nbsp;&nbsp;┌──────────────────────────────────┐<br>
-            &nbsp;&nbsp;│ ztunnel (shared, per-node)       │<br>
-            &nbsp;&nbsp;│ handles mTLS for all pods        │<br>
-            &nbsp;&nbsp;└──────────────────────────────────┘<br>
-            </span><br>
+            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">┌────────────────┐  ┌────────────────┐
+│ Pod A          │  │ Pod B          │
+│ (app only,     │  │ (app only,     │
+│  no sidecar)   │  │  no sidecar)   │
+└───────┬────────┘  └───────┬────────┘
+        │ iptables          │ iptables
+        ▼                   ▼
+┌────────────────────────────────────┐
+│ ztunnel (shared, per-node)         │
+│ handles mTLS for all pods          │
+└────────────────────────────────────┘</pre>
             &nbsp;&nbsp;Pros: No per-pod overhead, no injection, no restarts,<br>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enrollment is a namespace label<br>
             &nbsp;&nbsp;Cons: L7 requires deploying a waypoint proxy<br><br>
