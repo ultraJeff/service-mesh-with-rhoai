@@ -798,6 +798,128 @@ Timeouts                               Yes — body visible</pre>
     </div>
   </div>
 
+  <!-- Part 11: FAQ -->
+  <div class="section">
+    <div class="section-header" onclick="toggleSection(this)">
+      <span class="section-number">11</span>
+      <span class="section-title">FAQ &mdash; Common Questions</span>
+      <span class="section-time">reference</span>
+    </div>
+    <div class="section-body">
+      <div class="talking-point">
+        Answers to common questions from security-focused audiences.
+      </div>
+
+      <details class="deep-dive" open>
+        <summary>Does ACS (Advanced Cluster Security) still work with mesh-enrolled pods?</summary>
+        <div class="deep-dive-content">
+          <div style="font-size:13px; line-height:1.7;">
+            Yes. ACS operates at a different layer &mdash; it's not inspecting network traffic.
+            It does image scanning (CVEs), runtime monitoring (eBPF-based process/file watching),
+            network flow observation (connection metadata, not payload), and compliance checks
+            (SCC, RBAC). None of these interact with the mesh's mTLS layer. The mesh is
+            transparent to ACS the same way it's transparent to the application.
+          </div>
+        </div>
+      </details>
+
+      <details class="deep-dive">
+        <summary>Can someone use tcpdump to see unencrypted traffic in the mesh?</summary>
+        <div class="deep-dive-content">
+          <div style="font-size:13px; line-height:1.7;">
+            <strong>On the network (between nodes):</strong> No. All traffic is HBONE mTLS on
+            port 15008. tcpdump on any network interface shows encrypted bytes.<br><br>
+            <strong>Inside a pod's network namespace:</strong> Theoretically yes &mdash; ztunnel delivers
+            decrypted traffic to the app on port 8080. But OpenShift blocks this by default &mdash;
+            the <code>restricted</code> SCC doesn't allow <code>CAP_NET_RAW</code> required for tcpdump.<br><br>
+            <strong>With root on the node:</strong> Yes &mdash; someone with root could <code>nsenter</code>
+            into any pod's netns. But that's true of any encryption system &mdash; if you own the
+            node, you own everything on it.<br><br>
+            <strong>eBPF:</strong> Yes &mdash; eBPF runs in the kernel and can observe traffic at any
+            point in the network stack, before encryption or after decryption. But eBPF requires
+            <code>CAP_BPF</code> and <code>CAP_SYS_ADMIN</code> (kernel-level privileges).
+            Note: tools like Falco and ACS also USE eBPF defensively to detect threats.<br><br>
+            <strong>Bottom line:</strong> The mesh protects against network-level eavesdropping.
+            Node-level and kernel-level access is a different security boundary &mdash; that's
+            where ACS, Falco, and runtime security come in.
+          </div>
+        </div>
+      </details>
+
+      <details class="deep-dive">
+        <summary>How does the mesh interact with Kafka's own mTLS?</summary>
+        <div class="deep-dive-content">
+          <div style="font-size:13px; line-height:1.7;">
+            They stack. Kafka's mTLS runs inside the mesh's mTLS &mdash; double encryption.
+            ztunnel doesn't care what's inside the TCP stream. It just encrypts the pipe.<br><br>
+            <pre style="color:#c9d1d9; margin:8px 0; font-size:12px; line-height:1.5;">Kafka client encrypts (app-level TLS)
+  → ztunnel wraps in HBONE mTLS (mesh-level)
+    → on the wire: double encrypted
+  → destination ztunnel decrypts HBONE
+→ Kafka broker receives still-Kafka-encrypted data
+→ Kafka broker decrypts with its own keystore</pre>
+            You could disable Kafka's own TLS and let the mesh handle encryption &mdash;
+            simpler cert management, one trust chain. But many organizations keep both
+            because Kafka ACLs are tied to Kafka's own certificate identities, and
+            defense-in-depth is preferred.
+          </div>
+        </div>
+      </details>
+
+      <details class="deep-dive">
+        <summary>NetworkPolicy vs AuthorizationPolicy &mdash; do they conflict?</summary>
+        <div class="deep-dive-content">
+          <div style="font-size:13px; line-height:1.7;">
+            No conflict &mdash; they're evaluated at different layers and both must allow
+            the traffic for it to flow.<br><br>
+            <pre style="color:#c9d1d9; margin:8px 0; font-size:12px; line-height:1.5;">Traffic arrives at pod
+  → NetworkPolicy: "Is this source IP/namespace allowed?"
+    → No → dropped (never reaches the mesh)
+    → Yes ↓
+  → ztunnel: "Is this a valid mTLS connection?"
+    → No → rejected (STRICT PeerAuth)
+    → Yes ↓
+  → AuthorizationPolicy: "Is this SPIFFE identity allowed?"
+    → No → 403
+    → Yes → delivered to app</pre>
+            <strong>Important in ambient mode:</strong> NetworkPolicy sees the HBONE connection
+            from ztunnel (port 15008), not the original source pod. It can't distinguish
+            between different source workloads within the mesh &mdash; they all arrive via
+            ztunnel. For workload-level access control, use AuthorizationPolicy (matches
+            on SPIFFE identity after decryption).<br><br>
+            NetworkPolicy is still useful for blocking entire namespaces from establishing
+            HBONE tunnels, or for non-mesh traffic paths (like the notebook's auth proxy).
+          </div>
+        </div>
+      </details>
+
+      <details class="deep-dive">
+        <summary>Waypoints are per-namespace &mdash; but namespaces span multiple nodes?</summary>
+        <div class="deep-dive-content">
+          <div style="font-size:13px; line-height:1.7;">
+            The waypoint is a Deployment &mdash; it runs on one (or more) nodes.
+            ztunnel on every node knows where the waypoint is and routes through it
+            via HBONE, regardless of which node the waypoint pod is on.<br><br>
+            <pre style="color:#c9d1d9; margin:8px 0; font-size:12px; line-height:1.5;">Pod A (node 1)
+  → ztunnel (node 1) checks: does destination have a waypoint?
+    → yes → HBONE to waypoint pod (could be on node 3)
+      → waypoint does L7 inspection
+    → HBONE to destination pod (could be on node 2)</pre>
+            If the waypoint becomes a bottleneck, scale the Deployment:<br>
+            <code>oc scale deployment mesh-waypoint --replicas=3</code><br><br>
+            Kubernetes load-balances across replicas. You can add topology spread
+            constraints to distribute waypoint pods across nodes and minimize
+            cross-node hops.<br><br>
+            <strong>Trade-off vs sidecar:</strong> In sidecar mode, Envoy is always local
+            (same pod) &mdash; no extra network hop. In ambient, the waypoint may be
+            on a different node, adding a hop. But you have far fewer Envoy instances
+            to manage (one per namespace vs one per pod).
+          </div>
+        </div>
+      </details>
+    </div>
+  </div>
+
 </div>
 
 <div id="sidebar">
