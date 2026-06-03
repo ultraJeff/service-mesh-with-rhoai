@@ -431,6 +431,10 @@ metadata:
   name: iris-allow-gateway-only
   namespace: super-slim-demo
 spec:
+  targetRefs:
+    - kind: Gateway
+      group: gateway.networking.k8s.io
+      name: mesh-waypoint
   action: ALLOW
   rules:
     - from:
@@ -448,6 +452,10 @@ if [ "$EXISTS" = "0" ]; then
   echo 'No AuthorizationPolicy applied. All mesh identities can reach all services.'
 else
   echo 'AuthorizationPolicy: iris-allow-gateway-only'
+  echo ''
+  echo 'Target: Gateway/mesh-waypoint (the waypoint proxy)'
+  echo '  The policy is attached to the waypoint, which enforces'
+  echo '  it for all traffic flowing through the waypoint.'
   echo ''
   echo 'Rule: ALLOW traffic only from these SPIFFE identities:'
   echo ''
