@@ -93,7 +93,7 @@ async function loadDomain() {
     const res = await fetch('/api/domain');
     const { domain } = await res.json();
     document.getElementById('link-kiali').href = `https://kiali-istio-system.${domain}`;
-    document.getElementById('link-console').href = `https://console-openshift-console.${domain}/observe`;
+    document.getElementById('link-console').href = `https://console-openshift-console.${domain}/ossmconsole/graph`;
   } catch (e) {}
 }
 
