@@ -294,16 +294,16 @@ L2 (Ethernet frames)   ← physical/virtual network</pre>
             &nbsp;&nbsp;Every pod gets an Envoy proxy container <strong>injected</strong> alongside<br>
             &nbsp;&nbsp;the application container. The two containers share a network<br>
             &nbsp;&nbsp;namespace. All inbound and outbound traffic goes through Envoy.<br><br>
-            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">Pod A (node 1)                      Pod B (node 2)
-┌───────────────────┐               ┌───────────────────┐
-│ App ←→ Envoy      │               │ Envoy ←→ App      │
-│   (localhost,      │               │   (localhost,      │
-│    shared netns)   │               │    shared netns)   │
-└────────┬──────────┘               └────────┬──────────┘
-         │                                   │
-         └────── mTLS (direct TLS) ──────────┘
-              regular pod network (CNI)
-              no special mesh network</pre>
+            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">Pod A (node 1)                Pod B (node 2)
+┌────────────────────┐        ┌────────────────────┐
+│ App ←→ Envoy       │        │ Envoy ←→ App       │
+│ (localhost,        │        │ (localhost,        │
+│  shared netns)     │        │  shared netns)     │
+└─────────┬──────────┘        └─────────┬──────────┘
+          │                             │
+          └──── mTLS (direct TLS) ──────┘
+            regular pod network (CNI)
+            no special mesh network</pre>
             &nbsp;&nbsp;In sidecar mode, Envoy does the mTLS directly — it holds<br>
             &nbsp;&nbsp;the SPIFFE cert and does the TLS handshake over the normal<br>
             &nbsp;&nbsp;pod network (OVN, Calico, whatever CNI is installed).<br>
@@ -314,7 +314,8 @@ L2 (Ethernet frames)   ← physical/virtual network</pre>
             <strong style="color:#58a6ff;">Ambient mode (OSSM 3.x):</strong><br><br>
             &nbsp;&nbsp;No sidecar. ztunnel runs per-node (DaemonSet) and handles<br>
             &nbsp;&nbsp;L4 mTLS for all enrolled pods transparently. Envoy only<br>
-            &nbsp;&nbsp;appears as waypoint proxies (opt-in, per-namespace) for L7.<br><br>
+            &nbsp;&nbsp;appears as waypoint proxies (opt-in, for L7 policy) and<br>
+            &nbsp;&nbsp;the mesh gateway (for north-south ingress).<br><br>
             <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">┌────────────────┐  ┌────────────────┐
 │ Pod A          │  │ Pod B          │
 │ (app only,     │  │ (app only,     │
@@ -329,14 +330,15 @@ L2 (Ethernet frames)   ← physical/virtual network</pre>
             &nbsp;&nbsp;Pros: No per-pod overhead, no injection, no restarts,<br>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;enrollment is a namespace label<br>
             &nbsp;&nbsp;Cons: L7 requires deploying a waypoint proxy<br><br>
-            <strong style="color:#58a6ff;">Why this matters for RHOAI features like llm-d:</strong><br><br>
-            &nbsp;&nbsp;Some RHOAI capabilities may use sidecar injection for<br>
-            &nbsp;&nbsp;specific features (e.g., traffic splitting between model<br>
-            &nbsp;&nbsp;versions, request routing based on headers). Sidecar and<br>
-            &nbsp;&nbsp;ambient can <strong>coexist in the same mesh</strong> &mdash; some namespaces<br>
-            &nbsp;&nbsp;use ambient (label-based enrollment), others use sidecar<br>
-            &nbsp;&nbsp;injection. They share the same Istio control plane and<br>
-            &nbsp;&nbsp;the same CA trust chain.
+            <strong style="color:#58a6ff;">Can sidecar and ambient coexist?</strong><br><br>
+            &nbsp;&nbsp;Yes. Sidecar and ambient can <strong>coexist in the same mesh</strong>.<br>
+            &nbsp;&nbsp;Label each namespace for one mode only &mdash; either<br>
+            &nbsp;&nbsp;<code>istio-injection=enabled</code> (sidecar) or<br>
+            &nbsp;&nbsp;<code>istio.io/dataplane-mode=ambient</code> (ambient).<br>
+            &nbsp;&nbsp;Both share the same Istio control plane and CA trust chain.<br><br>
+            &nbsp;&nbsp;This matters for gradual migration: you can move namespaces<br>
+            &nbsp;&nbsp;from sidecar to ambient one at a time, or keep some on<br>
+            &nbsp;&nbsp;sidecar if they need features that require it.
           </div>
         </div>
       </details>
