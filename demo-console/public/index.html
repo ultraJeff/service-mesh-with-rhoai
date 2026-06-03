@@ -743,30 +743,29 @@ Timeouts                               Yes — body visible</pre>
         <summary>Deep dive: State of ambient multi-cluster (OSSM 3.3 / Istio 1.28)</summary>
         <div class="deep-dive-content">
           <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
-            <strong style="color:#58a6ff;">Maturity timeline:</strong><br>
-            <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">OSSM 3.2 (Istio 1.27)  Dev Preview    ztunnel VIP format broke all traffic
-OSSM 3.3 (Istio 1.28)  Tech Preview   control plane works, data plane incomplete
-OSSM 3.4 (Istio 1.29)  Beta           connectivity and stability fixes</pre>
-            <strong style="color:#58a6ff;">What works in OSSM 3.3:</strong><br><br>
-            &nbsp;&nbsp;&bull; Shared root CA across clusters (what we demonstrated)<br>
-            &nbsp;&nbsp;&bull; Per-cluster intermediate CAs via cert-manager<br>
+            <strong style="color:#58a6ff;">What we confirmed on OSSM 3.3 (Istio 1.28):</strong><br><br>
             &nbsp;&nbsp;&bull; <code>AMBIENT_ENABLE_MULTI_NETWORK=true</code> creates the<br>
             &nbsp;&nbsp;&nbsp;&nbsp;<code>istio-east-west</code> GatewayClass<br>
-            &nbsp;&nbsp;&bull; Remote secrets for cross-cluster service discovery<br>
-            &nbsp;&nbsp;&bull; istiod sees remote endpoints (confirmed via debug API)<br><br>
-            <strong style="color:#58a6ff;">What doesn't work yet:</strong><br><br>
-            &nbsp;&nbsp;&bull; ztunnel cross-network data plane routing<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;(traffic goes to local ClusterIP, not through E/W gateway)<br>
-            &nbsp;&nbsp;&bull; <code>clusterName</code> must be set on both Istio CR AND ZTunnel CR<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;(path: <code>values.ztunnel.multiCluster.clusterName</code>)<br><br>
+            &nbsp;&nbsp;&bull; <code>clusterName</code> works when set on both Istio CR and ZTunnel CR<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;Istio CR: <code>values.global.multiCluster.clusterName</code><br>
+            &nbsp;&nbsp;&nbsp;&nbsp;ZTunnel CR: <code>values.ztunnel.multiCluster.clusterName</code><br>
+            &nbsp;&nbsp;&bull; Remote secrets sync &mdash; istiod sees remote endpoints<br>
+            &nbsp;&nbsp;&bull; E/W gateway pods deploy with <code>istio-east-west</code> GatewayClass<br>
+            &nbsp;&nbsp;&bull; Shared root CA across clusters (fingerprint match)<br><br>
+            <strong style="color:#58a6ff;">What we couldn't test:</strong><br><br>
+            &nbsp;&nbsp;&bull; Actual cross-cluster traffic routing<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;Our workshop clusters have isolated VM networks &mdash;<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;MetalLB IPs are not routable between clusters.<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;On cloud clusters with real LoadBalancers, the E/W<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;gateways would get routable IPs and this may work.<br><br>
             <strong style="color:#58a6ff;">Infrastructure requirement:</strong><br><br>
             &nbsp;&nbsp;East-west gateways need <strong>L4 exposure</strong> (MetalLB or<br>
             &nbsp;&nbsp;cloud LoadBalancer). OCP Routes are L7 (HAProxy) and<br>
             &nbsp;&nbsp;break the HBONE/mTLS passthrough. Do not use Routes<br>
             &nbsp;&nbsp;for east-west gateways.<br><br>
-            <span style="color:#d29922;">Ambient multi-cluster is Tech Preview in OSSM 3.3.<br>
-            Follow upstream Istio and OSSM release notes for<br>
-            updates on GA timeline.</span>
+            <span style="color:#d29922;">Ambient multi-cluster maturity is evolving across OSSM<br>
+            releases. Follow upstream Istio and OSSM release notes<br>
+            for the latest on supported configurations.</span>
           </div>
         </div>
       </details>
