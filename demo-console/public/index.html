@@ -100,11 +100,11 @@
             &nbsp;&nbsp;part of the ambient mesh and speaks mTLS to backends.<br>
             &nbsp;&nbsp;For models with <code>enable-auth: true</code>, a separate mesh-internal<br>
             &nbsp;&nbsp;Service routes traffic from the mesh gateway to the app container.<br><br>
-            <strong style="color:#3fb950;">Simplification: BackendTLSPolicy (Gateway API v1alpha3)</strong><br>
-            &nbsp;&nbsp;Expected in OCP 4.22. Lets the OCP gateway natively connect<br>
+            <strong style="color:#3fb950;">Simplification: BackendTLSPolicy (Gateway API v1, GA)</strong><br>
+            &nbsp;&nbsp;Lets the OCP gateway natively connect<br>
             &nbsp;&nbsp;to mesh-enrolled backends over TLS &mdash; eliminating the need<br>
             &nbsp;&nbsp;for the separate mesh-internal Service.<br><br>
-            &nbsp;&nbsp;<span style="color:#c9d1d9;">apiVersion: gateway.networking.k8s.io/v1alpha3<br>
+            &nbsp;&nbsp;<span style="color:#c9d1d9;">apiVersion: gateway.networking.k8s.io/v1<br>
             &nbsp;&nbsp;kind: BackendTLSPolicy<br>
             &nbsp;&nbsp;spec:<br>
             &nbsp;&nbsp;&nbsp;&nbsp;targetRefs:<br>
@@ -338,7 +338,11 @@ L2 (Ethernet frames)   ← physical/virtual network</pre>
             &nbsp;&nbsp;Both share the same Istio control plane and CA trust chain.<br><br>
             &nbsp;&nbsp;This matters for gradual migration: you can move namespaces<br>
             &nbsp;&nbsp;from sidecar to ambient one at a time, or keep some on<br>
-            &nbsp;&nbsp;sidecar if they need features that require it.
+            &nbsp;&nbsp;sidecar if they need features that require it.<br><br>
+            &nbsp;&nbsp;<strong>Caveat:</strong> traffic from sidecar pods to ambient pods may<br>
+            &nbsp;&nbsp;bypass waypoint proxies, so L7 policies won't be enforced<br>
+            &nbsp;&nbsp;for that cross-mode traffic. Keep tightly coupled workloads<br>
+            &nbsp;&nbsp;in the same mode.
           </div>
         </div>
       </details>
@@ -397,7 +401,7 @@ L2 (Ethernet frames)   ← physical/virtual network</pre>
         provides this as a managed operator:</span><br>
         <span style="color:#8b949e; font-family:'SF Mono','Fira Code',monospace; font-size:11px;"><br>
         &nbsp;&nbsp;Current:&nbsp;&nbsp;&nbsp;cacerts secret &rarr; istiod (built-in CA) &rarr; SPIFFE certs<br>
-        &nbsp;&nbsp;With ZTWIM: SPIRE server &rarr; istiod (as agent) &rarr; SPIFFE certs<br><br></span>
+        &nbsp;&nbsp;With ZTWIM: SPIRE server &rarr; istiod (delegates to SPIRE) &rarr; SPIFFE certs<br><br></span>
         <span style="color:#c9d1d9;">Same SPIFFE format, same ztunnel mTLS &mdash; but adds hardware root of trust,
         cross-cloud federation, and centralized identity governance.</span>
       </div>
@@ -671,8 +675,9 @@ Timeouts                               Yes — body visible</pre>
             &nbsp;&nbsp;<strong style="color:#3fb950;">Option 2:</strong> Accept the waypoint. It's Istio-managed infrastructure,<br>
             &nbsp;&nbsp;protected by RBAC, auditable. Same trust level as ztunnel.<br><br>
             &nbsp;&nbsp;<strong style="color:#3fb950;">Option 3:</strong> App-level encryption on top (<code>enable-auth</code> or native TLS).<br>
-            &nbsp;&nbsp;The waypoint can still route and retry based on headers, but the<br>
-            &nbsp;&nbsp;body is encrypted by the app — the waypoint can't read it.<br><br>
+            &nbsp;&nbsp;The waypoint sees an opaque TLS stream — it cannot read headers<br>
+            &nbsp;&nbsp;OR body. L7 features (routing, retries) won't work, but the data<br>
+            &nbsp;&nbsp;is fully protected. Only SNI from the TLS handshake is visible.<br><br>
             <span style="color:#d29922;">This is the same trade-off as sidecar mode — every sidecar sees<br>
             decrypted traffic. In ambient, the waypoint centralizes that<br>
             exposure to one pod per namespace instead of one per pod.</span>
@@ -744,8 +749,8 @@ Timeouts                               Yes — body visible</pre>
         <div class="deep-dive-content">
           <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
             <strong style="color:#58a6ff;">What we confirmed on OSSM 3.3 (Istio 1.28):</strong><br><br>
-            &nbsp;&nbsp;&bull; <code>AMBIENT_ENABLE_MULTI_NETWORK=true</code> creates the<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;<code>istio-east-west</code> GatewayClass<br>
+            &nbsp;&nbsp;&bull; <code>AMBIENT_ENABLE_MULTI_NETWORK=true</code> enables multi-network<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;support, making the <code>istio-east-west</code> GatewayClass available<br>
             &nbsp;&nbsp;&bull; <code>clusterName</code> works when set on both Istio CR and ZTunnel CR<br>
             &nbsp;&nbsp;&nbsp;&nbsp;Istio CR: <code>values.global.multiCluster.clusterName</code><br>
             &nbsp;&nbsp;&nbsp;&nbsp;ZTunnel CR: <code>values.ztunnel.multiCluster.clusterName</code><br>
