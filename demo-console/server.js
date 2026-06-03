@@ -751,13 +751,13 @@ for i in $(seq 1 10); do
 done
 echo "  $PASS/$((PASS+FAIL))"
 echo ''
-echo 'httpbin (pod-to-pod via waypoint):'
+echo 'httpbin /unstable (pod-to-pod via waypoint):'
 PASS2=0; FAIL2=0
-for i in $(seq 1 10); do
-  CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://httpbin.super-slim-demo.svc/get 2>/dev/null)
+for i in $(seq 1 5); do
+  CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://httpbin.super-slim-demo.svc/unstable 2>/dev/null)
   if [ "$CODE" = "200" ]; then PASS2=$((PASS2+1)); printf "."; else FAIL2=$((FAIL2+1)); printf "X"; fi
 done
-echo "  $PASS2/$((PASS2+FAIL2))"
+echo "  $PASS2 ok, $FAIL2 errors (visible in Kiali as error rate)"
 echo ''
 echo 'Check Kiali graph now — select super-slim-demo namespace.'
 echo 'You should see: mesh-gateway → iris-onnx-mesh, test-client → httpbin'`);
