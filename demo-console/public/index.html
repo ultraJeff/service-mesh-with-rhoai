@@ -597,7 +597,7 @@ Pod B (receives HTTP)</pre>
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
       <span class="section-number">7</span>
-      <span class="section-title">Traffic Management &mdash; Retries &amp; Timeouts</span>
+      <span class="section-title">Traffic Management &mdash; Timeouts</span>
       <span class="section-time">3 min</span>
     </div>
     <div class="section-body">
@@ -613,9 +613,9 @@ Pod B (receives HTTP)</pre>
       <pre class="output" id="out-7a"></pre>
       <div class="action-group">
         <div class="action-group-label">Step 2: Apply timeout policy</div>
-        <button class="btn success" onclick="runAction('/api/retry-policy/apply', 'out-7b', 'POST')">Apply Timeout Policy</button>
-        <button class="btn" onclick="runAction('/api/retry-policy/explain', 'out-7b')">What does this policy say?</button>
-        <button class="btn danger" onclick="runAction('/api/retry-policy/delete', 'out-7b', 'POST')">Remove Policy</button>
+        <button class="btn success" onclick="runAction('/api/timeout-policy/apply', 'out-7b', 'POST')">Apply Timeout Policy</button>
+        <button class="btn" onclick="runAction('/api/timeout-policy/explain', 'out-7b')">What does this policy say?</button>
+        <button class="btn danger" onclick="runAction('/api/timeout-policy/delete', 'out-7b', 'POST')">Remove Policy</button>
       </div>
       <pre class="output" id="out-7b"></pre>
       <div class="action-group">
@@ -762,7 +762,7 @@ Timeouts                               Yes — body visible</pre>
   </div>
 
   <div class="status-card">
-    <h3>Retry Policy</h3>
+    <h3>Timeout Policy</h3>
     <div id="status-retry"><span class="status-dot yellow"></span>Loading...</div>
   </div>
 

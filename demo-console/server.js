@@ -36,10 +36,10 @@ app.get('/api/health', async (req, res) => {
   res.json({ nodes: nodes.output, mesh: mesh.output, pods: pods.output });
 });
 
-app.get('/api/retry-policy/status', async (req, res) => {
-  const result = await run('oc get virtualservice httpbin-retries -n super-slim-demo --no-headers 2>/dev/null');
+app.get('/api/timeout-policy/status', async (req, res) => {
+  const result = await run('oc get virtualservice httpbin-timeout -n super-slim-demo --no-headers 2>/dev/null');
   const active = result.output.trim().length > 0 && result.exitCode === 0;
-  res.json({ active, output: result.output || 'No retry policy applied' });
+  res.json({ active, output: result.output || 'No timeout policy applied' });
 });
 
 app.get('/api/authz-policy/status', async (req, res) => {
@@ -591,12 +591,12 @@ fi`);
   res.json(result);
 });
 
-app.post('/api/retry-policy/apply', async (req, res) => {
+app.post('/api/timeout-policy/apply', async (req, res) => {
   const result = await run(`oc apply -f - <<ENDOFPOLICY 2>&1
 apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
-  name: httpbin-retries
+  name: httpbin-timeout
   namespace: super-slim-demo
 spec:
   hosts:
@@ -616,27 +616,25 @@ ENDOFPOLICY`);
   res.json(result);
 });
 
-app.post('/api/retry-policy/delete', async (req, res) => {
-  const result = await run('oc delete virtualservice httpbin-retries -n super-slim-demo 2>&1');
+app.post('/api/timeout-policy/delete', async (req, res) => {
+  const result = await run('oc delete virtualservice httpbin-timeout -n super-slim-demo 2>&1');
   res.json(result);
 });
 
-app.get('/api/retry-policy/explain', async (req, res) => {
-  const result = await run(`EXISTS=$(oc get virtualservice httpbin-retries -n super-slim-demo --no-headers 2>/dev/null | wc -l | tr -d ' ')
+app.get('/api/timeout-policy/explain', async (req, res) => {
+  const result = await run(`EXISTS=$(oc get virtualservice httpbin-timeout -n super-slim-demo --no-headers 2>/dev/null | wc -l | tr -d ' ')
 if [ "$EXISTS" = "0" ]; then
-  echo 'No retry policy applied.'
-  echo 'Requests that fail get returned to the client as-is.'
+  echo 'No timeout policy applied.'
+  echo 'Requests wait as long as the server takes to respond.'
 else
-  echo 'VirtualService: httpbin-retries'
+  echo 'VirtualService: httpbin-timeout'
   echo ''
-  echo '  retries:'
-  echo '    attempts: 3      (retry up to 3 times)'
-  echo '    retryOn: 5xx     (retry on any server error)'
-  echo '  timeout: 5s        (total request timeout)'
+  echo '  timeout: 5s'
+  echo '    If the backend takes longer than 5 seconds,'
+  echo '    the waypoint cuts the request and returns 504.'
   echo ''
-  echo 'The waypoint proxy (Envoy) handles retries automatically.'
-  echo 'The client sends one request — Envoy retries behind the scenes.'
-  echo 'If all retries fail, the client gets the final error.'
+  echo 'The waypoint proxy (Envoy) enforces this automatically.'
+  echo 'The app does not need timeout logic.'
 fi`);
   res.json(result);
 });
@@ -657,7 +655,7 @@ if [ "$CODE" = "504" ]; then
   echo "of waiting forever."
 elif [ "$ELAPSED" -gt 8 ]; then
   echo "No timeout policy active — the request waited the full delay."
-  echo "Apply the retry policy (which includes timeout: 5s) to see the difference."
+  echo "Apply the timeout policy (5s) to see the difference."
 else
   echo "Request completed in \${ELAPSED}s."
 fi`);
