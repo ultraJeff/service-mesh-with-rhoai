@@ -218,6 +218,15 @@
             &nbsp;&nbsp;touches a physical interface. Traffic <em>between</em> pods crosses<br>
             &nbsp;&nbsp;namespace boundaries and goes over the network — that's what<br>
             &nbsp;&nbsp;ztunnel encrypts.<br><br>
+            <strong style="color:#58a6ff;">A note on iptables vs nftables:</strong><br><br>
+            &nbsp;&nbsp;On modern kernels (including RHCOS), the <code>iptables</code> binary<br>
+            &nbsp;&nbsp;is actually backed by <strong>nftables</strong> in the kernel<br>
+            &nbsp;&nbsp;(<code>iptables v1.8.x (nf_tables)</code>). The CLI is iptables<br>
+            &nbsp;&nbsp;but the kernel uses nftables rules internally.<br><br>
+            &nbsp;&nbsp;Istio 1.28+ also supports a <strong>native nftables</strong> mode<br>
+            &nbsp;&nbsp;(<code>nativeNftables=true</code>) that bypasses the iptables<br>
+            &nbsp;&nbsp;CLI entirely. This is opt-in and the long-term direction,<br>
+            &nbsp;&nbsp;but iptables remains the default with no deprecation announced.<br><br>
             <span style="color:#d29922;">Think of it as: istio-cni is the plumber that connects the pipes.<br>
             ztunnel is the water treatment plant that all the pipes flow<br>
             through. Neither lives in your house (pod) — they're shared<br>
