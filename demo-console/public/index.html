@@ -819,6 +819,42 @@ Timeouts                               Yes — body visible</pre>
         Answers to common questions from security-focused audiences.
       </div>
 
+      <details class="deep-dive">
+        <summary>Can I restrict app-to-app traffic within the same namespace?</summary>
+        <div class="deep-dive-content">
+          <div style="font-size:13px; line-height:1.7;">
+            Yes. AuthorizationPolicy can target specific services and match on source
+            SPIFFE identity, even within the same namespace. Each pod gets its own identity
+            based on its service account (<code>spiffe://cluster.local/ns/demo/sa/app-a</code> vs
+            <code>sa/app-b</code>). You can write a policy that says &ldquo;only app-a can call app-b&rdquo;
+            while both live in the same namespace.<br><br>
+            For fine-grained control, assign different service accounts to different
+            applications. If all pods use the <code>default</code> service account, they share
+            the same SPIFFE identity and can&rsquo;t be distinguished by AuthorizationPolicy.<br><br>
+            The waypoint proxy enforces at L7 (HTTP path, method, headers).
+            ztunnel enforces at L4 (identity + port). Both work within a single namespace.
+          </div>
+        </div>
+      </details>
+
+      <details class="deep-dive">
+        <summary>Can mesh certificates be used for application-level authentication?</summary>
+        <div class="deep-dive-content">
+          <div style="font-size:13px; line-height:1.7;">
+            In ambient mode, <strong>no</strong> &mdash; the SPIFFE certificates are held by ztunnel,
+            not exposed to the application. The app never sees the cert; ztunnel handles
+            mTLS transparently.<br><br>
+            Mesh certs secure <strong>communication</strong> (transport-level identity). For
+            <strong>application-level authentication</strong> (user identity, API tokens), use:<br>
+            &bull; OAuth/OIDC &mdash; kube-rbac-proxy or Authorino<br>
+            &bull; SPIRE Workload API &mdash; with ZTWIM, apps CAN request their own
+            SPIFFE SVID via a mounted Unix socket, enabling app-level cert-based auth<br><br>
+            <strong>Summary:</strong> ambient mesh = transport security only. For app-level cert
+            access, use ZTWIM/SPIRE which exposes the Workload API to applications.
+          </div>
+        </div>
+      </details>
+
       <details class="deep-dive" open>
         <summary>Does ACS (Advanced Cluster Security) still work with mesh-enrolled pods?</summary>
         <div class="deep-dive-content">
