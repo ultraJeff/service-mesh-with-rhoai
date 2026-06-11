@@ -895,8 +895,10 @@ Timeouts                               Yes — body visible</pre>
         <summary>How does the mesh interact with Kafka's own mTLS?</summary>
         <div class="deep-dive-content">
           <div style="font-size:13px; line-height:1.7;">
-            They stack. Kafka's mTLS runs inside the mesh's mTLS &mdash; double encryption.
-            ztunnel doesn't care what's inside the TCP stream. It just encrypts the pipe.<br><br>
+            <strong>If both producer and broker are in the mesh:</strong> Kafka's mTLS
+            and mesh mTLS stack. ztunnel wraps the Kafka-encrypted bytes in HBONE
+            (double encryption). ztunnel is protocol-agnostic &mdash; it doesn't parse
+            the Kafka binary protocol, just tunnels the raw TCP bytes.<br><br>
             <pre style="color:#c9d1d9; margin:8px 0; font-size:12px; line-height:1.5;">Kafka client encrypts (app-level TLS)
   → ztunnel wraps in HBONE mTLS (mesh-level)
     → on the wire: double encrypted
@@ -905,8 +907,22 @@ Timeouts                               Yes — body visible</pre>
 → Kafka broker decrypts with its own keystore</pre>
             You could disable Kafka's own TLS and let the mesh handle encryption &mdash;
             simpler cert management, one trust chain. But many organizations keep both
-            because Kafka ACLs are tied to Kafka's own certificate identities, and
-            defense-in-depth is preferred.
+            because Kafka ACLs are tied to Kafka's own certificate identities.<br><br>
+            <strong>If producer is in the mesh but broker/consumer is outside:</strong><br><br>
+            ztunnel is smart about outbound traffic &mdash; it only attempts mTLS to
+            destinations it knows are in the mesh. For non-mesh destinations, traffic
+            passes through as plain TCP. So a mesh-enrolled producer can reach an
+            external Kafka broker with no issues. Kafka's own TLS still works normally.<br><br>
+            <strong>If broker is in the mesh but consumer is outside:</strong><br><br>
+            This is the problem case. The consumer has no SPIFFE cert. If the broker
+            namespace has STRICT PeerAuthentication, the consumer gets rejected.
+            Options:<br>
+            &bull; Set PERMISSIVE on the broker's Kafka port (allows both mTLS and plain TCP)<br>
+            &bull; Enroll the consumer's namespace in the mesh<br>
+            &bull; Keep the broker outside the mesh if you have mixed mesh/non-mesh clients<br><br>
+            <strong>General rule:</strong> the issue only arises on the <em>inbound</em> side &mdash;
+            when non-mesh clients try to reach mesh-enrolled pods with STRICT mTLS.
+            Outbound from mesh to non-mesh always works.
           </div>
         </div>
       </details>
