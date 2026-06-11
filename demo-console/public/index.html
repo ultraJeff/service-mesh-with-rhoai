@@ -915,25 +915,32 @@ Timeouts                               Yes — body visible</pre>
         <summary>NetworkPolicy vs AuthorizationPolicy &mdash; do they conflict?</summary>
         <div class="deep-dive-content">
           <div style="font-size:13px; line-height:1.7;">
-            No conflict &mdash; they're evaluated at different layers and both must allow
-            the traffic for it to flow.<br><br>
-            <pre style="color:#c9d1d9; margin:8px 0; font-size:12px; line-height:1.5;">Traffic arrives at pod
-  → NetworkPolicy: "Is this source IP/namespace allowed?"
-    → No → dropped (never reaches the mesh)
-    → Yes ↓
-  → ztunnel: "Is this a valid mTLS connection?"
-    → No → rejected (STRICT PeerAuth)
-    → Yes ↓
-  → AuthorizationPolicy: "Is this SPIFFE identity allowed?"
-    → No → 403
-    → Yes → delivered to app</pre>
-            <strong>Important in ambient mode:</strong> NetworkPolicy sees the HBONE connection
-            from ztunnel (port 15008), not the original source pod. It can't distinguish
-            between different source workloads within the mesh &mdash; they all arrive via
-            ztunnel. For workload-level access control, use AuthorizationPolicy (matches
-            on SPIFFE identity after decryption).<br><br>
-            NetworkPolicy is still useful for blocking entire namespaces from establishing
-            HBONE tunnels, or for non-mesh traffic paths (like the notebook's auth proxy).
+            No conflict, but they serve very different purposes once ambient mesh
+            is involved.<br><br>
+            <strong>The key issue:</strong> in ambient mode, all mesh traffic arrives at
+            destination pods from <strong>ztunnel's IP on port 15008</strong>, not from
+            the original source pod. NetworkPolicy can't see the original source &mdash;
+            it only sees ztunnel. This makes NetworkPolicies essentially useless
+            for access control between mesh-enrolled workloads.<br><br>
+            <pre style="color:#c9d1d9; margin:8px 0; font-size:12px; line-height:1.5;">For mesh-enrolled workloads:
+  NetworkPolicy  → sees ztunnel IP, can't distinguish sources
+                 → effectively only controls mesh vs non-mesh boundary
+  AuthorizationPolicy → sees SPIFFE identity after mTLS handshake
+                      → fine-grained workload-to-workload control
+
+For non-mesh workloads:
+  NetworkPolicy  → works normally (sees real source IPs)
+  AuthorizationPolicy → not applicable (no mesh, no SPIFFE)</pre>
+            <strong>In practice:</strong> once a namespace is ambient-enrolled,
+            <strong>AuthorizationPolicy replaces NetworkPolicy</strong> as the access
+            control mechanism. NetworkPolicy is still relevant for:<br><br>
+            &bull; Non-mesh namespaces (pods not enrolled in ambient)<br>
+            &bull; Controlling whether non-mesh traffic can reach mesh pods at all<br>
+            &bull; RHOAI-managed paths (e.g., notebook NetworkPolicy allowing
+            only <code>redhat-ods-applications</code> namespace)<br><br>
+            <strong>Recommendation:</strong> for mesh-enrolled namespaces, use
+            AuthorizationPolicy for all access control decisions. Keep
+            NetworkPolicies for non-mesh boundaries and legacy workloads.
           </div>
         </div>
       </details>
