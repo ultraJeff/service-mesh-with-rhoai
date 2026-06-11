@@ -662,16 +662,19 @@ Pod B (receives HTTP)</pre>
         <summary>Deep dive: Waypoint security — what the proxy can see</summary>
         <div class="deep-dive-content">
           <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
-            <strong style="color:#58a6ff;">The waypoint sees the full HTTP stream.</strong><br><br>
-            &nbsp;&nbsp;When traffic flows through the waypoint, ztunnel decrypts<br>
-            &nbsp;&nbsp;the HBONE tunnel and delivers the raw HTTP to Envoy.<br>
-            &nbsp;&nbsp;Envoy sees:<br><br>
-            &nbsp;&nbsp;&nbsp;&nbsp;&bull; HTTP headers (path, method, content-type)<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;&bull; HTTP body (inference inputs, model predictions)<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;&bull; All request/response data in memory<br><br>
-            &nbsp;&nbsp;Most policies only <em>need</em> headers (AuthZ matches on<br>
-            &nbsp;&nbsp;identity/path, retries match on status codes), but the<br>
-            &nbsp;&nbsp;body is in Envoy's memory as it proxies the request.<br><br>
+            <strong style="color:#58a6ff;">What does the waypoint actually see?</strong><br><br>
+            &nbsp;&nbsp;Envoy <strong>parses HTTP headers</strong> for policy decisions:<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; Path, method, host (routing)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; Source SPIFFE identity (AuthorizationPolicy)<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;&bull; Response status code (retries)<br><br>
+            &nbsp;&nbsp;Envoy does <strong>NOT inspect the body</strong>. The body transits<br>
+            &nbsp;&nbsp;through Envoy's memory as it proxies the request, but<br>
+            &nbsp;&nbsp;Envoy does not parse or read body content for any<br>
+            &nbsp;&nbsp;standard policy decision.<br><br>
+            &nbsp;&nbsp;However, a <strong>compromised waypoint</strong> could read the body<br>
+            &nbsp;&nbsp;from process memory &mdash; it's there, just not inspected.<br>
+            &nbsp;&nbsp;Think of it as a mail carrier who delivers a sealed letter:<br>
+            &nbsp;&nbsp;they carry it but don't open it.<br><br>
             <strong style="color:#58a6ff;">Do models always need a waypoint?</strong><br>
             <pre style="color:#c9d1d9; margin:8px 0 8px 16px; font-size:12px; line-height:1.5;">What you need                          Waypoint?
 ─────────────────────────────────────  ─────────
