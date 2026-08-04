@@ -2,7 +2,7 @@ apiVersion: serving.kserve.io/v1beta1
 kind: InferenceService
 metadata:
   name: phi-4-mini
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
   annotations:
     serving.kserve.io/deploymentMode: RawDeployment
   labels:
@@ -15,7 +15,7 @@ spec:
       runtime: vllm-cpu-runtime
       modelFormat:
         name: vLLM
-      storageUri: oci://image-registry.openshift-image-registry.svc:5000/super-slim-demo/phi-4-mini-modelcar:latest
+      storageUri: oci://registry.ultra.lab/ai-models/phi-4-mini-modelcar:latest
       resources:
         requests:
           cpu: "4"
