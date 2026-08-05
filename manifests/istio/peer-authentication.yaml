@@ -7,7 +7,7 @@ apiVersion: security.istio.io/v1
 kind: PeerAuthentication
 metadata:
   name: default
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
 spec:
   mtls:
     mode: STRICT
@@ -17,7 +17,7 @@ apiVersion: security.istio.io/v1
 kind: PeerAuthentication
 metadata:
   name: allow-metrics-scrape
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
 spec:
   selector:
     matchLabels:
@@ -25,5 +25,5 @@ spec:
   mtls:
     mode: STRICT
   portLevelMtls:
-    8082:
+    "8082":
       mode: PERMISSIVE

@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- rhoai/namespace.yaml
+- rhoai/dsci.yaml
+- rhoai/dsc.yaml
+- platform/ovn-and-monitoring.yaml
+- operators/subscriptions.yaml
+- certs/ca-chain.yaml
+- certs/gateway-tls-cert.yaml
+- istio/mesh-components.yaml
+- istio/gateway.yaml
+- istio/waypoint.yaml
+- istio/peer-authentication.yaml
+- istio/httproute-models.yaml
+- istio/ocp-routes.yaml
+- models/mlserver-serving-runtime.yaml
+- models/vllm-serving-runtime.yaml
+- models/iris-inference-service.yaml
+- models/phi4-inference-service.yaml
+- monitoring/prometheus-monitors.yaml
+- observability/kiali.yaml
+- demo/httpbin.yaml
+- demo/iris-onnx-mesh-service.yaml
+- demo/test-client.yaml
