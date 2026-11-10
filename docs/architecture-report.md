@@ -60,7 +60,7 @@ All mesh certificates — both the external-facing gateway TLS cert and the inte
        ├──► Gateway TLS cert  (mesh-gateway.apps.tallgeese.ultra.lab, 90d)
        │    Used by: ai-models-gateway (istio-ingress, defined in ossm-3-demo) for external TLS termination
        │
-       └──► Istio cacerts  (ca-cert.pem / ca-key.pem / root-cert.pem)
+       └──► Istio cacerts  (tls.crt / tls.key / ca.crt, written by cert-manager)
             Used by: istiod to sign SPIFFE workload identity certs
             All ztunnel HBONE tunnels use certs from this chain
 ```
@@ -201,10 +201,9 @@ All mesh certificates — both the external-facing gateway TLS cert and the inte
  │   SPIFFE SVIDs)    north-south)                                │
  │                                                                │
  │  Istio CA: cacerts secret                                      │
- │  ├─ ca-cert.pem   = Mesh Intermediate CA cert                  │
- │  ├─ ca-key.pem    = Mesh Intermediate CA key                   │
- │  ├─ root-cert.pem = Mesh Root CA cert (trust anchor)           │
- │  └─ cert-chain.pem = Intermediate + Root                       │
+ │  ├─ tls.crt = Mesh Intermediate CA cert                        │
+ │  ├─ tls.key = Mesh Intermediate CA key                         │
+ │  └─ ca.crt  = Mesh Root CA cert (trust anchor)                 │
  └────────────────────────────────────────────────────────────────┘
  ┌───────────────────────┐  ┌───────────────────────┐
  │ istio-cni (DaemonSet) │  │ ztunnel (DaemonSet)   │
@@ -229,9 +228,9 @@ ClusterIssuer/mesh-selfsigned        # bootstrap (self-signed)
           → Certificate/mesh-gateway-cert  # Gateway TLS (90d TTL)
 ```
 
-The Istio `cacerts` secret is constructed from the cert-manager outputs via `scripts/create-istio-cacerts.sh`, which maps cert-manager's key names (`tls.crt`/`tls.key`) to Istio's expected names (`ca-cert.pem`/`ca-key.pem`/`root-cert.pem`/`cert-chain.pem`).
+cert-manager issues the intermediate CA straight into the Istio `cacerts` secret (`Certificate/mesh-intermediate-ca`, `secretName: cacerts`). istiod reads cert-manager's key names directly (`tls.crt`, `tls.key`, `ca.crt`) and watches the secret, so a renewed intermediate reaches istiod without a copy step. The CA chain is defined in ossm-3-demo (`deploy/base/mesh/mesh-ca.yaml`) and deployed by the `service-mesh` ArgoCD app.
 
-**Why this matters for multi-cluster:** All clusters sharing the same root CA can cross-authenticate workload SPIFFE identities. Deploy the same `cacerts` secret (with the same root CA) to each cluster's `istio-system` namespace.
+**Why this matters for multi-cluster:** All clusters sharing the same root CA can cross-authenticate workload SPIFFE identities.
 
 ### 2. Identity: SPIFFE/SPIRE-Compatible Workload IDs
 

@@ -117,7 +117,7 @@
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind: Secret</span><br><br>
             <span style="color:#d29922;">This simplifies the ingress path but does NOT replace the mesh.<br>
             The ambient mesh is still required for east-west mTLS, SPIFFE<br>
-            identity, AuthorizationPolicy, and multi-cluster federation.<br>
+            identity, and AuthorizationPolicy.<br>
             BackendTLSPolicy bridges ingress to mesh &mdash; it is not the mesh itself.<br>
             RFE-9140 tracks this for RHOAI + OSSM integration.</span>
           </div>
@@ -726,71 +726,6 @@ Timeouts                               Yes — body visible</pre>
     </div>
   </div>
 
-  <!-- Part 9: Multi-Cluster -->
-  <div class="section">
-    <div class="section-header" onclick="toggleSection(this)">
-      <span class="section-number">9</span>
-      <span class="section-title">Multi-Cluster Trust</span>
-      <span class="section-time">2 min</span>
-    </div>
-    <div class="section-body">
-      <div class="talking-point">
-        Two clusters, two meshes, <strong>one root CA</strong>.
-        Each cluster has its own intermediate CA, but they chain to the
-        same trust anchor. Each control plane already <strong>discovers the
-        other cluster's services</strong> via remote secrets. Cross-cluster
-        mTLS traffic routing is the next step.
-      </div>
-      <div class="action-group">
-        <div class="action-group-label">Shared trust (same root CA = cross-cluster identity verification)</div>
-        <button class="btn primary" onclick="runAction('/api/multi-cluster-verify', 'out-9a')">Compare Root CA Fingerprints</button>
-        <button class="btn" onclick="runAction('/api/multi-cluster-certs', 'out-9a')">Compare Gateway Cert Chains</button>
-      </div>
-      <pre class="output" id="out-9a"></pre>
-      <div class="action-group">
-        <div class="action-group-label">Cross-cluster service discovery (istiod sees remote endpoints)</div>
-        <button class="btn" onclick="runAction('/api/multi-cluster-discovery', 'out-9b')">Show Remote Endpoints</button>
-      </div>
-      <pre class="output" id="out-9b"></pre>
-      <div class="action-group">
-        <div class="action-group-label">Federation status and roadmap</div>
-        <button class="btn primary" onclick="runAction('/api/multi-cluster-status', 'out-9c')">Show Multi-Cluster Status</button>
-      </div>
-      <pre class="output" id="out-9c"></pre>
-
-      <details class="deep-dive">
-        <summary>Deep dive: State of ambient multi-cluster (OSSM 3.3 / Istio 1.28)</summary>
-        <div class="deep-dive-content">
-          <div style="font-family:'SF Mono','Fira Code',monospace; font-size:12px; line-height:1.8;">
-            <strong style="color:#58a6ff;">What we confirmed on OSSM 3.3 (Istio 1.28):</strong><br><br>
-            &nbsp;&nbsp;&bull; <code>AMBIENT_ENABLE_MULTI_NETWORK=true</code> enables multi-network<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;support, making the <code>istio-east-west</code> GatewayClass available<br>
-            &nbsp;&nbsp;&bull; <code>clusterName</code> works when set on both Istio CR and ZTunnel CR<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;Istio CR: <code>values.global.multiCluster.clusterName</code><br>
-            &nbsp;&nbsp;&nbsp;&nbsp;ZTunnel CR: <code>values.ztunnel.multiCluster.clusterName</code><br>
-            &nbsp;&nbsp;&bull; Remote secrets sync &mdash; istiod sees remote endpoints<br>
-            &nbsp;&nbsp;&bull; E/W gateway pods deploy with <code>istio-east-west</code> GatewayClass<br>
-            &nbsp;&nbsp;&bull; Shared root CA across clusters (fingerprint match)<br><br>
-            <strong style="color:#58a6ff;">What we couldn't test:</strong><br><br>
-            &nbsp;&nbsp;&bull; Actual cross-cluster traffic routing<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;Our workshop clusters have isolated VM networks &mdash;<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;MetalLB IPs are not routable between clusters.<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;On cloud clusters with real LoadBalancers, the E/W<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;gateways would get routable IPs and this may work.<br><br>
-            <strong style="color:#58a6ff;">Infrastructure requirement:</strong><br><br>
-            &nbsp;&nbsp;East-west gateways need <strong>L4 exposure</strong> (MetalLB or<br>
-            &nbsp;&nbsp;cloud LoadBalancer). OCP Routes are L7 (HAProxy) and<br>
-            &nbsp;&nbsp;break the HBONE/mTLS passthrough. Do not use Routes<br>
-            &nbsp;&nbsp;for east-west gateways.<br><br>
-            <span style="color:#d29922;">Ambient multi-cluster maturity is evolving across OSSM<br>
-            releases. Follow upstream Istio and OSSM release notes<br>
-            for the latest on supported configurations.</span>
-          </div>
-        </div>
-      </details>
-    </div>
-  </div>
-
   <!-- Part 10: Mesh Resources -->
   <div class="section">
     <div class="section-header" onclick="toggleSection(this)">
@@ -1044,23 +979,6 @@ For non-mesh workloads:
   <div class="status-card">
     <h3>Timeout Policy</h3>
     <div id="status-retry"><span class="status-dot yellow"></span>Loading...</div>
-  </div>
-
-  <h2 style="margin-top:20px;">SNO Cluster</h2>
-
-  <div class="status-card">
-    <h3>Node</h3>
-    <div id="status-sno-node"><span class="status-dot yellow"></span>Loading...</div>
-  </div>
-
-  <div class="status-card">
-    <h3>Mesh</h3>
-    <div id="status-sno-mesh"><span class="status-dot yellow"></span>Loading...</div>
-  </div>
-
-  <div class="status-card">
-    <h3>Workloads (demo-app)</h3>
-    <div id="status-sno-pods"><span class="status-dot yellow"></span>Loading...</div>
   </div>
 </div>
 

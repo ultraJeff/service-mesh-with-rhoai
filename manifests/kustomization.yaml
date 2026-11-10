@@ -7,7 +7,6 @@ resources:
 - rhoai/dsc.yaml
 - platform/ovn-and-monitoring.yaml
 - operators/subscriptions.yaml
-- certs
 - istio/mesh-components.yaml
 - istio/waypoint.yaml
 - istio/peer-authentication.yaml

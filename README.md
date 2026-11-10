@@ -60,34 +60,26 @@ The OSSM v3 ambient mesh (deployed by the [ossm-3-demo](https://github.com/ultra
 
 ## Dependency on ossm-3-demo
 
-The north-south gateway for the model endpoints lives in **ossm-3-demo**, not here. `resources/rhoai/overlays/models/` in that repo defines:
+The mesh configuration this demo runs on lives in **ossm-3-demo**, not here. ArgoCD deploys it from [openshift-bootstrap-gitops](https://github.com/ultraJeff/openshift-bootstrap-gitops):
 
-- `istio-ingress/ai-models-gateway` (the Gateway)
-- the HTTPRoutes for `iris-onnx` and `phi4-mesh`
-- the passthrough OpenShift Routes
-- the `istio-system/ai-models-gateway-tls` ReferenceGrant
+| What | Where in ossm-3-demo | ArgoCD app |
+|---|---|---|
+| Mesh CA chain: self-signed ClusterIssuer, root and intermediate CA, their Issuers | `deploy/base/mesh/mesh-ca.yaml` | `service-mesh` |
+| AI models gateway: `istio-ingress/ai-models-gateway`, its HTTPRoutes and passthrough Routes, the ReferenceGrant, and the `mesh-gateway-cert` Certificate | `resources/rhoai/gateway/` | `ai-models-gateway` |
 
-This repo still owns the certificate chain the gateway serves: the CA, the intermediate CA Issuer, and the `mesh-gateway-cert` Certificate in `manifests/certs/`. The gateway reads the resulting `istio-system/mesh-gateway-tls` secret across namespaces through the ReferenceGrant.
+This repo holds the demo console, the docs, and reference manifests for the models and demo workloads. `manifests/` is not synced by ArgoCD. Parts of it overlap with the `service-mesh` app (Istio, IstioCNI, ZTunnel, Kiali, the operator Subscriptions), so don't point an app at the whole directory.
 
-Keep the two in step:
+When you change the demo, keep the two in step:
 
-- If you add a hostname to an HTTPRoute in ossm-3-demo, add it to `dnsNames` in `manifests/certs/gateway-tls-cert.yaml`.
-- If you rename or move the Certificate or its secret, update the Gateway and the ReferenceGrant in ossm-3-demo.
-- Don't copy `mesh-gateway-tls` into `istio-ingress`. cert-manager only renews the secret it owns. A copy made this way expired in August 2026.
+- If you add a hostname to an HTTPRoute, add it to `dnsNames` in ossm-3-demo's `resources/rhoai/gateway/gateway-tls-cert.yaml`.
+- Don't copy `mesh-gateway-tls` into `istio-ingress`. The gateway reads it from `istio-system` through the ReferenceGrant, and cert-manager only renews the secret it owns. A copy made this way expired in August 2026.
 
-ArgoCD manages both halves from [openshift-bootstrap-gitops](https://github.com/ultraJeff/openshift-bootstrap-gitops):
+### The mesh CA is managed by cert-manager end to end
 
-- The `ai-models-gateway-certs` app deploys `manifests/certs/` from this repo.
-- The `ai-models-gateway` app deploys `resources/rhoai/gateway/` from ossm-3-demo.
+cert-manager issues the intermediate CA straight into `istio-system/cacerts`, the secret istiod loads its signing CA from. istiod reads cert-manager's `tls.crt` / `tls.key` / `ca.crt` keys directly and watches the secret, so a renewed intermediate reaches istiod with no copy step and no script.
 
-The rest of `manifests/` is not synced by ArgoCD. Parts of it overlap with the `service-mesh` app (Istio, IstioCNI, ZTunnel, Kiali, the operator Subscriptions), so don't point an app at the whole directory.
-
-### The CA chain is also Istio's mesh CA
-
-`istio-system/cacerts` is built from `mesh-intermediate-ca-secret` by `scripts/create-istio-cacerts.sh`, so istiod signs every workload certificate with this intermediate CA. Two consequences:
-
-- **Changing the CA Certificates reissues the CA.** That includes their `subject.organizations`. Plan it as a CA rotation: rerun the script, restart istiod and ztunnel, and reissue the gateway cert. Don't change the CA in a routine sync.
-- **`cacerts` is a copy, and it will not follow a renewal.** The intermediate CA is valid until 2031, and cert-manager renews it a year early, in 2030. When that happens, rerun `create-istio-cacerts.sh`, or the mesh keeps signing with the old CA.
+- **A renewal is routine.** cert-manager renews the intermediate a year before it expires (2031). istiod reloads it as long as the root is unchanged.
+- **Changing the CA is a rotation.** Changing the CA Certificates' subject or keys, or replacing the root, reissues the CA. Plan it, and don't let it ride along with a routine sync. A new root also needs istiod's multi-root support or a restart, plus a trust-bundle rollout.
 
 ## What's Here
 
@@ -105,9 +97,6 @@ manifests/
     phi4-inference-service.yaml
     mlserver-serving-runtime.yaml
     iris-inference-service.yaml
-  certs/                      # Custom CA chain and gateway certificate
-    ca-chain.yaml             # Root and intermediate CA, intermediate CA Issuer
-    gateway-tls-cert.yaml     # Certificate served by ai-models-gateway (ossm-3-demo)
 ```
 
 ## Applying

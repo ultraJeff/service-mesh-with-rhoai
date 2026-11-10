@@ -20,13 +20,6 @@ function run(cmd) {
 
 app.get('/api/domain', (req, res) => { res.json({ domain: DOMAIN }); });
 
-app.get('/api/sno-status', async (req, res) => {
-  const nodes = await run('oc --context sno get nodes --no-headers 2>/dev/null');
-  const mesh = await run('oc --context sno get istio,istiocni,ztunnel -A --no-headers 2>/dev/null');
-  const pods = await run('oc --context sno get pods -n demo-app --no-headers 2>/dev/null | grep -v Completed | grep -v Terminating');
-  res.json({ nodes: nodes.output, mesh: mesh.output, pods: pods.output });
-});
-
 // --- Health & Status ---
 
 app.get('/api/health', async (req, res) => {
@@ -214,19 +207,19 @@ echo '1. Gateway cert (what external clients see):'
 echo | openssl s_client -connect iris-onnx.${DOMAIN}:443 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null | sed 's/^/   /'
 echo ''
 echo '2. Istio CA (what signs workload SPIFFE certs):'
-oc get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -issuer 2>/dev/null | sed 's/^/   /'
+oc get secret cacerts -n istio-system -o jsonpath='{.data.tls\\.crt}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -issuer 2>/dev/null | sed 's/^/   /'
 echo ''
-echo '3. Root CA (the shared trust anchor):'
-oc get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -issuer 2>/dev/null | sed 's/^/   /'
+echo '3. Root CA (the trust anchor):'
+oc get secret cacerts -n istio-system -o jsonpath='{.data.ca\\.crt}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -issuer 2>/dev/null | sed 's/^/   /'
 echo ''
 echo 'Chain: gateway cert → signed by intermediate → signed by root (self-signed)'
-echo 'All three are connected. The root is the same on every cluster.'`);
+echo 'All three are connected, and cert-manager manages every link.'`);
   res.json(result);
 });
 
 app.get('/api/cacerts-secret', async (req, res) => {
   const result = await run(`echo 'Secret: cacerts  (namespace: istio-system)'
-echo 'Istio checks for this secret by name at startup.'
+echo 'istiod loads its signing CA from this secret by name, and watches it for changes.'
 echo ''
 echo 'Keys in the secret:'
 oc get secret cacerts -n istio-system -o jsonpath='{.data}' 2>/dev/null | python3 -c "
@@ -245,17 +238,19 @@ for k in sorted(d.keys()):
     print(f'  {k:20s} {info}')
 "
 echo ''
-echo 'How we create it (scripts/create-istio-cacerts.sh):'
-echo '  1. cert-manager creates mesh-root-ca-secret and mesh-intermediate-ca-secret'
-echo '  2. Script extracts tls.crt/tls.key and maps to Istio key names:'
-echo '     tls.crt  (intermediate) → ca-cert.pem'
-echo '     tls.key  (intermediate) → ca-key.pem'
-echo '     tls.crt  (root)         → root-cert.pem'
-echo '     ca-cert + root-cert     → cert-chain.pem'
-echo '  3. oc create secret generic cacerts -n istio-system ...'
+echo 'How it gets here:'
+echo '  cert-manager issues the intermediate CA straight into this secret'
+echo '  (Certificate mesh-intermediate-ca, secretName: cacerts). istiod reads'
+echo '  cert-manager'"'"'s key names directly:'
+echo '     tls.crt  → intermediate CA certificate (signs workload certs)'
+echo '     tls.key  → intermediate CA private key'
+echo '     ca.crt   → root CA certificate (the trust anchor)'
+echo '  When cert-manager renews the intermediate, istiod picks up the new one.'
+echo '  No copy step, no script.'
 echo ''
-echo 'In production: your PKI team provides the intermediate cert+key and root cert.'
-echo 'You create this one secret. Istio handles everything else.'`);
+echo 'In production: point cert-manager at your corporate PKI (or have your PKI'
+echo 'team provide the intermediate cert+key and root cert in this secret).'
+echo 'Istio handles everything else.'`);
   res.json(result);
 });
 
@@ -659,110 +654,6 @@ elif [ "$ELAPSED" -gt 8 ]; then
 else
   echo "Request completed in \${ELAPSED}s."
 fi`);
-  res.json(result);
-});
-
-// --- Part 7: Multi-Cluster ---
-
-app.get('/api/root-ca', async (req, res) => {
-  const result = await run("oc get secret mesh-root-ca-secret -n istio-system -o jsonpath='{.data.tls\\.crt}' 2>/dev/null | base64 -d | openssl x509 -noout -subject -fingerprint 2>/dev/null");
-  res.json(result);
-});
-
-app.get('/api/multi-cluster-verify', async (req, res) => {
-  const result = await run(`RHOAI_FP=$(oc --context rhoai get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -fingerprint 2>/dev/null | cut -d= -f2)
-SNO_FP=$(oc --context sno get secret cacerts -n istio-system -o jsonpath='{.data.root-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -fingerprint 2>/dev/null | cut -d= -f2)
-RHOAI_INT=$(oc --context rhoai get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject 2>/dev/null | sed 's/subject=//')
-SNO_INT=$(oc --context sno get secret cacerts -n istio-system -o jsonpath='{.data.ca-cert\\.pem}' 2>/dev/null | base64 -d | openssl x509 -noout -subject 2>/dev/null | sed 's/subject=//')
-
-echo 'Root CA (trust anchor):'
-echo "  RHOAI cluster: $RHOAI_FP"
-echo "  SNO cluster:   $SNO_FP"
-if [ "$RHOAI_FP" = "$SNO_FP" ]; then
-  echo "  ✓ MATCH — same root CA on both clusters"
-else
-  echo "  ✗ MISMATCH — different root CAs"
-fi
-echo ''
-echo 'Intermediate CAs (unique per cluster):'
-echo "  RHOAI: $RHOAI_INT"
-echo "  SNO:   $SNO_INT"
-echo ''
-echo 'Same root = any workload on either cluster can verify the'
-echo "other's SPIFFE identity. Cross-cluster mTLS is possible."`);
-  res.json(result);
-});
-
-app.get('/api/multi-cluster-discovery', async (req, res) => {
-  const result = await run(`echo 'Cross-cluster endpoint discovery (from RHOAI istiod):'
-echo ''
-oc --context rhoai exec -n istio-system deploy/istiod -- pilot-discovery request GET /debug/endpointShardz 2>/dev/null | python3 -c "
-import json, sys
-d = json.load(sys.stdin)
-interesting = ['demo-app', 'istio-system', 'ossm-ai-models']
-for svc, data in d.items():
-    for ns, sharddata in data.items():
-        shards = sharddata.get('Shards', {})
-        for shard, eps in shards.items():
-            if 'sno' in shard and any(ns in svc for ns in interesting):
-                print(f'  {svc}')
-                print(f'    shard: {shard}  endpoints: {len(eps)}')
-                for ep in eps[:1]:
-                    net = ep.get('Labels',{}).get('topology.istio.io/network','?')
-                    print(f'    network: {net}')
-                print()
-" 2>/dev/null
-FOUND=$(oc --context rhoai exec -n istio-system deploy/istiod -- pilot-discovery request GET /debug/endpointShardz 2>/dev/null | grep -c "sno" 2>/dev/null)
-if [ "$FOUND" -gt 0 ]; then
-  echo "istiod on the RHOAI cluster sees SNO services."
-  echo "The control plane knows about remote endpoints."
-else
-  echo "(no remote endpoints found — remote secret may need refresh)"
-fi`);
-  res.json(result);
-});
-
-app.get('/api/multi-cluster-status', async (req, res) => {
-  const result = await run(`echo 'Multi-cluster federation status:'
-echo ''
-echo '  ✓ Shared root CA            Both clusters trust the same root'
-echo '  ✓ Per-cluster intermediate   Each cluster signs its own workload certs'
-echo ''
-echo '  ⏳ Cross-cluster traffic     Requires OSSM 3.4 (Istio 1.29)'
-echo ''
-echo 'Ambient multi-cluster is Tech Preview in OSSM 3.3 (Istio 1.28).'
-echo 'The ztunnel data plane routing for cross-network traffic is not'
-echo 'complete in this version — it reaches Beta in Istio 1.29 / OSSM 3.4'
-echo 'with connectivity and stability fixes for ztunnel cross-cluster routing.'
-echo ''
-echo 'What we built today that carries forward:'
-echo '  - Shared root CA across clusters (the trust anchor)'
-echo '  - Per-cluster intermediate CAs (cert-manager managed)'
-echo '  - cacerts secret format (same on every cluster)'
-echo '  - Ambient mesh configuration (Istio CR, ZTunnel CR, IstioCNI)'
-echo ''
-echo 'When OSSM 3.4 ships:'
-echo '  - East-west gateway (istio-east-west GatewayClass) routes cross-cluster'
-echo '  - ztunnel handles HBONE tunnels between clusters natively'
-echo '  - Same shared root CA — no trust infrastructure changes needed'
-echo ''
-echo 'The trust infrastructure is the hard part. Cross-cluster routing'
-echo 'is a version upgrade — not a rebuild.'`);
-  res.json(result);
-});
-
-app.get('/api/multi-cluster-certs', async (req, res) => {
-  const rhoai_domain = await run("oc --context rhoai get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null");
-  const rhoaiDomain = rhoai_domain.output.trim().replace(/'/g, '');
-  const sno_domain = await run("oc --context sno get ingress.config.openshift.io cluster -o jsonpath='{.spec.domain}' 2>/dev/null");
-  const snoDomain = sno_domain.output.trim().replace(/'/g, '');
-  const result = await run(`echo '=== RHOAI cluster gateway cert ==='
-echo | openssl s_client -connect iris-onnx.${rhoaiDomain}:443 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null
-echo ''
-echo '=== SNO cluster gateway cert ==='
-echo | openssl s_client -connect httpbin.${snoDomain}:443 2>/dev/null | openssl x509 -noout -subject -issuer 2>/dev/null
-echo ''
-echo 'Different intermediate CAs, same root = federated trust.'`);
   res.json(result);
 });
 

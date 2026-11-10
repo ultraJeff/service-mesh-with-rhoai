@@ -4,7 +4,7 @@ This script mirrors the interactive demo console (`demo-console/`). Run the cons
 
 ## Pre-Demo
 
-- Verify `oc config use-context rhoai` and both clusters are healthy
+- Verify `oc config use-context rhoai` and the cluster is healthy
 - Run the demo console and confirm sidebar shows green status
 - Have root CA extracted: the console handles this automatically
 
@@ -53,9 +53,3 @@ Simulate 503 failure (client sees error), apply retry+timeout policy, test timeo
 ## Part 8: Observability (2 min) — Visual
 
 Generate traffic to both iris-onnx and httpbin, then show Kiali topology graph with traffic flow and error rates. Open OSSMConsole in OCP web console.
-
-## Part 9: Multi-Cluster (2 min) — Forward-Looking
-
-Compare root CA fingerprints (identical across clusters), compare gateway cert chains (different intermediates, same root). Show status: trust ready, cross-cluster routing in OSSM 3.4.
-
-**Key talking point:** "Same root CA on both clusters. When ambient multi-cluster GAs, cross-cluster mTLS is a version upgrade, not a rebuild."

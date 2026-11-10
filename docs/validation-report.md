@@ -240,21 +240,13 @@ The demo's statement about "workload discovery, L4 authorization rules, SPIFFE c
 
 ## 14. cert-manager and Istio cacerts
 
-**VERIFIED** -- with one important detail about reload behavior
-
-The demo's description of the `cacerts` secret format is correct:
-
-- **Key names**: `ca-cert.pem`, `ca-key.pem`, `root-cert.pem`, `cert-chain.pem` -- confirmed by [Istio docs: Plug in CA Certificates](https://istio.io/latest/docs/tasks/security/cert-management/plugin-ca-cert/).
+**VERIFIED** -- updated 2026-11-10 after switching to cert-manager's key format
 
 - **Secret name**: Must be `cacerts` in the `istio-system` namespace.
 
-- **Mapping from cert-manager**: The demo's mapping (intermediate tls.crt -> ca-cert.pem, intermediate tls.key -> ca-key.pem, root tls.crt -> root-cert.pem, intermediate + root -> cert-chain.pem) is correct.
+- **Key names**: istiod accepts either Istio's own names (`ca-cert.pem`, `ca-key.pem`, `root-cert.pem`, `cert-chain.pem`, per [Istio docs: Plug in CA Certificates](https://istio.io/latest/docs/tasks/security/cert-management/plugin-ca-cert/)) or a Kubernetes TLS-style secret (`tls.crt`, `tls.key`, `ca.crt`). If `tls.crt` is present it uses that format. The demo now uses cert-manager's format: the `mesh-intermediate-ca` Certificate writes straight into `cacerts`, so there is no mapping step and no script. (Source: `detectSigningCABundleAndCRL` in `pilot/pkg/bootstrap/istio_ca.go`, Istio release-1.30.)
 
-- **Reload behavior**: The demo says "Istio checks for this secret by name at startup." This is **partially correct**:
-  - **Default**: istiod loads the CA from the `cacerts` secret **only at startup**. Updating the secret requires restarting istiod.
-  - **With `AUTO_RELOAD_PLUGIN_CERTS=true`**: istiod watches the secret and dynamically reloads when it changes, with no restart needed. ([Tetrate blog: Automate Istio CA rotation](https://tetrate.io/blog/automate-istio-ca-rotation-in-production-at-scale))
-
-**Recommendation**: If `AUTO_RELOAD_PLUGIN_CERTS=true` is set in your Istio CR, update the demo text to say "istiod watches this secret and reloads dynamically." If not, note that istiod restart is required after updating the secret.
+- **Reload behavior**: In Istio 1.30 (checked in the release-1.30 source; the mesh now runs 1.31), istiod always watches the mounted `cacerts` files and reloads about 100 ms after a change. There is no `AUTO_RELOAD_PLUGIN_CERTS` flag any more; an earlier version of this report said reload required it. Reload accepts a new **intermediate** only if the root is byte-for-byte unchanged. A new root needs the multi-root feature. Switching formats with a root that differed by a trailing newline was rejected as a "new ROOT-CA", so that one-time switch needed an istiod restart. Routine renewals keep the same root bytes and reload without a restart.
 
 ---
 
@@ -295,5 +287,5 @@ The demo states: "SPIRE server -> istiod (as agent) -> SPIFFE certs."
 | 11 | Sidecar and ambient coexistence | VERIFIED | Missing caveat: waypoint bypass for cross-mode traffic |
 | 12 | Multi-cluster ambient | NEEDS CORRECTION | Alpha in 1.28, not just "Tech Preview"; flag details |
 | 13 | xDS protocol for ztunnel | VERIFIED | Uses custom xDS types, not standard Envoy types |
-| 14 | cert-manager and cacerts | VERIFIED | Note: reload requires AUTO_RELOAD_PLUGIN_CERTS=true |
+| 14 | cert-manager and cacerts | VERIFIED | cert-manager writes cacerts directly; istiod 1.30+ watches and reloads (no flag) |
 | 15 | ZTWIM | VERIFIED | "istiod as agent" is a simplification |

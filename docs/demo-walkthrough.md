@@ -58,9 +58,9 @@ Make sure you're on the RHOAI context: `oc config use-context rhoai`
 
 "All certificates chain to one root CA that you control."
 
-1. Click **Show CA Chain Architecture** — walk down the chain. "Root CA is shared across clusters. Intermediate is unique per cluster. Gateway cert is what external clients see. And istiod uses the intermediate to sign SPIFFE workload certs every 24 hours, automatically."
+1. Click **Show CA Chain Architecture** — walk down the chain. "Root CA is the trust anchor. Gateway cert is what external clients see. And istiod uses the intermediate to sign SPIFFE workload certs every 24 hours, automatically."
 
-2. Click **Show cacerts Secret** — "This is where you put your certs. One secret, four keys. Your PKI team provides the root and intermediate, you create the secret, Istio handles everything else."
+2. Click **Show cacerts Secret** — "This is where istiod gets its signing CA. One secret, three keys, written by cert-manager. Point cert-manager at your PKI and Istio handles everything else."
 
 3. Click **Verify Full Cert Chain** — "And here's proof it's all connected. Gateway cert signed by the intermediate, intermediate signed by the root."
 
@@ -137,22 +137,6 @@ Make sure you're on the RHOAI context: `oc config use-context rhoai`
 2. Click **Kiali Dashboard** — "Here's the mesh topology. You can see the mesh gateway routing to iris-onnx, the test client going through the waypoint to httpbin, and the error rate on the unstable endpoint. Every connection shows mTLS status."
 
 3. Click **OCP Console → Service Mesh** — "Same view integrated into the OpenShift console via the OSSMConsole plugin."
-
----
-
-## Part 9: Multi-Cluster Trust (2 min)
-
-**Click section 9.**
-
-"Two clusters, one root CA."
-
-1. Click **Compare Root CA Fingerprints** — "Same fingerprint on both clusters. Same trust anchor. Different intermediate CAs — each cluster signs its own workload certs."
-
-2. Click **Compare Gateway Cert Chains** — "RHOAI cluster's gateway was signed by its intermediate. SNO cluster's was signed by its intermediate. Both chain to the same root."
-
-3. Click **Show Multi-Cluster Status** — "Shared root CA is done. Cross-cluster traffic routing ships in the next OSSM release. The trust infrastructure is the hard part — that's already built. Cross-cluster mTLS is a version upgrade, not a rebuild."
-
-4. Point at the **Kiali and OCP Console links** — "And you can see all of this in Kiali — the mesh topology, traffic flow, mTLS status."
 
 ---
 
