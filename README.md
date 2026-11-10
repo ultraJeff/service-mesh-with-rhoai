@@ -56,13 +56,30 @@ The OSSM v3 ambient mesh (deployed by the [ossm-3-demo](https://github.com/ultra
 - OSSM v3 operator installed (servicemeshoperator3) — managed by ArgoCD via ossm-3-demo
 - cert-manager operator installed
 - The `service-mesh` ArgoCD Application deployed from [openshift-bootstrap-gitops](https://github.com/ultraJeff/openshift-bootstrap-gitops)
+- The AI models gateway stack from [ossm-3-demo](https://github.com/ultraJeff/ossm-3-demo) (see below)
+
+## Dependency on ossm-3-demo
+
+The north-south gateway for the model endpoints lives in **ossm-3-demo**, not here. `resources/rhoai/overlays/models/` in that repo defines:
+
+- `istio-ingress/ai-models-gateway` (the Gateway)
+- the HTTPRoutes for `iris-onnx` and `phi4-mesh`
+- the passthrough OpenShift Routes
+- the `istio-system/ai-models-gateway-tls` ReferenceGrant
+
+This repo still owns the certificate chain the gateway serves: the CA, the intermediate CA Issuer, and the `mesh-gateway-cert` Certificate in `manifests/certs/`. The gateway reads the resulting `istio-system/mesh-gateway-tls` secret across namespaces through the ReferenceGrant.
+
+Keep the two in step:
+
+- If you add a hostname to an HTTPRoute in ossm-3-demo, add it to `dnsNames` in `manifests/certs/gateway-tls-cert.yaml`.
+- If you rename or move the Certificate or its secret, update the Gateway and the ReferenceGrant in ossm-3-demo.
+- Don't copy `mesh-gateway-tls` into `istio-ingress`. cert-manager only renews the secret it owns. A copy made this way expired in August 2026.
 
 ## What's Here
 
 ```
 manifests/
   istio/                      # Mesh config for RHOAI workloads
-    gateway.yaml              # North-south Gateway (istio GatewayClass)
     waypoint.yaml             # Waypoint proxy for L7 policy (istio-waypoint)
     peer-authentication.yaml  # PERMISSIVE mTLS (RHOAI gateway is outside mesh)
   rhoai/                      # RHOAI config
@@ -74,8 +91,9 @@ manifests/
     phi4-inference-service.yaml
     mlserver-serving-runtime.yaml
     iris-inference-service.yaml
-  certs/                      # Custom CA for Istio (multi-cluster)
-    custom-ca-example.yaml
+  certs/                      # Custom CA chain and gateway certificate
+    ca-chain.yaml             # Root and intermediate CA, intermediate CA Issuer
+    gateway-tls-cert.yaml     # Certificate served by ai-models-gateway (ossm-3-demo)
 ```
 
 ## Applying

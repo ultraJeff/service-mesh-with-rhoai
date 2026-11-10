@@ -1,5 +1,10 @@
-# TLS certificate for the mesh gateway's external-facing listener.
+# TLS certificate for the AI models gateway's external-facing listener.
 # Signed by the intermediate CA so clients can verify the chain.
+#
+# Consumed by istio-ingress/ai-models-gateway, which is defined in the
+# ossm-3-demo repo (resources/rhoai/overlays/models/ai-models-gateway.yaml)
+# and reads this secret across namespaces through a ReferenceGrant. Don't
+# copy the secret into istio-ingress: cert-manager only renews this one.
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
@@ -14,6 +19,7 @@ spec:
     - "iris-onnx.apps.tallgeese.ultra.lab"
     - "phi-4-mini.apps.tallgeese.ultra.lab"
     - "mesh-gateway.apps.tallgeese.ultra.lab"
+    - "phi4-mesh.apps.tallgeese.ultra.lab"
   privateKey:
     algorithm: ECDSA
     size: 256

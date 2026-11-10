@@ -58,7 +58,7 @@ All mesh certificates — both the external-facing gateway TLS cert and the inte
   Mesh Intermediate CA  (signed by root, 5yr)
        │
        ├──► Gateway TLS cert  (mesh-gateway.apps.tallgeese.ultra.lab, 90d)
-       │    Used by: mesh-gateway Envoy for external TLS termination
+       │    Used by: ai-models-gateway (istio-ingress, defined in ossm-3-demo) for external TLS termination
        │
        └──► Istio cacerts  (ca-cert.pem / ca-key.pem / root-cert.pem)
             Used by: istiod to sign SPIFFE workload identity certs
