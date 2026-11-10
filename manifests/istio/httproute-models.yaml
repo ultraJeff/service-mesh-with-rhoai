@@ -5,7 +5,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: iris-onnx-route
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
 spec:
   parentRefs:
     - name: mesh-gateway
@@ -25,7 +25,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
   name: phi-4-mini-route
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
 spec:
   parentRefs:
     - name: mesh-gateway

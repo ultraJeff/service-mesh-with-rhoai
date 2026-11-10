@@ -36,9 +36,9 @@ echo "Restarting ztunnel..."
 oc rollout restart daemonset ztunnel -n ztunnel
 oc rollout status daemonset ztunnel -n ztunnel --timeout=120s
 
-echo "Restarting workloads in super-slim-demo..."
-oc delete pod -n super-slim-demo -l gateway.networking.k8s.io/gateway-name=mesh-waypoint
-oc rollout restart deployment iris-onnx-predictor phi-4-mini-predictor -n super-slim-demo 2>/dev/null || true
+echo "Restarting workloads in ossm-ai-models..."
+oc delete pod -n ossm-ai-models -l gateway.networking.k8s.io/gateway-name=mesh-waypoint
+oc rollout restart deployment iris-onnx-predictor phi-4-mini-predictor -n ossm-ai-models 2>/dev/null || true
 
 echo ""
 echo "Done. All mesh components now use the custom CA."

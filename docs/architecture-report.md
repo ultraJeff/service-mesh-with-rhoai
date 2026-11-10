@@ -120,7 +120,7 @@ All mesh certificates — both the external-facing gateway TLS cert and the inte
             │ dst: spiffe://.../sa/default
             ▼
  ┌────────────────────────────────────────────────────────────────┐
- │ super-slim-demo namespace                                      │
+ │ ossm-ai-models namespace                                      │
  │ Labels: istio.io/dataplane-mode: ambient                       │
  │         istio.io/use-waypoint: mesh-waypoint                   │
  │ PeerAuthentication: STRICT                                     │
@@ -238,7 +238,7 @@ The Istio `cacerts` secret is constructed from the cert-manager outputs via `scr
 Every workload in the ambient mesh receives a **SPIFFE Verifiable Identity Document (SVID)** certificate signed by the Mesh Intermediate CA. The identity format:
 
 ```
-spiffe://cluster.local/ns/super-slim-demo/sa/default
+spiffe://cluster.local/ns/ossm-ai-models/sa/default
          └─ trust domain   └─ namespace          └─ service account
 ```
 
@@ -300,7 +300,7 @@ apiVersion: security.istio.io/v1
 kind: PeerAuthentication
 metadata:
   name: default
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
 spec:
   mtls:
     mode: STRICT
@@ -322,7 +322,7 @@ apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: mesh-waypoint
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
   labels:
     istio.io/waypoint-for: service
 spec:
@@ -411,14 +411,14 @@ oc logs -n ztunnel -l app=ztunnel --since=30s | grep "access"
 
 # Look for:
 #   src.identity="spiffe://cluster.local/ns/istio-system/sa/mesh-gateway-istio"
-#   dst.identity="spiffe://cluster.local/ns/super-slim-demo/sa/default"
+#   dst.identity="spiffe://cluster.local/ns/ossm-ai-models/sa/default"
 #   dst.hbone_addr=10.x.x.x:8080 (HBONE tunnel, not direct)
 ```
 
 ### 4. Packet Capture — Wire-Level Proof
 
 ```bash
-NODE=$(oc get pod -n super-slim-demo -l app=isvc.iris-onnx-predictor \
+NODE=$(oc get pod -n ossm-ai-models -l app=isvc.iris-onnx-predictor \
   -o jsonpath='{.items[0].spec.nodeName}')
 oc debug node/$NODE -- chroot /host \
   tcpdump -i any -c 20 port 15008 -w /tmp/mesh-traffic.pcap

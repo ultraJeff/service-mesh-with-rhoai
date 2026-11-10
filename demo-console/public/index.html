@@ -435,7 +435,7 @@ L2 (Ethernet frames)   ← physical/virtual network</pre>
             &nbsp;&nbsp;kind: ReferenceGrant<br>
             &nbsp;&nbsp;metadata:<br>
             &nbsp;&nbsp;&nbsp;&nbsp;name: allow-gateway-to-model<br>
-            &nbsp;&nbsp;&nbsp;&nbsp;namespace: super-slim-demo<br>
+            &nbsp;&nbsp;&nbsp;&nbsp;namespace: ossm-ai-models<br>
             &nbsp;&nbsp;spec:<br>
             &nbsp;&nbsp;&nbsp;&nbsp;from:<br>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;- group: gateway.networking.k8s.io<br>
@@ -446,7 +446,7 @@ L2 (Ethernet frames)   ← physical/virtual network</pre>
             &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;kind: Service<br>
             </span><br>
             <strong style="color:#58a6ff;">In our setup:</strong><br>
-            &nbsp;&nbsp;Our HTTPRoutes are in <code>super-slim-demo</code> (same namespace as<br>
+            &nbsp;&nbsp;Our HTTPRoutes are in <code>ossm-ai-models</code> (same namespace as<br>
             &nbsp;&nbsp;the Services), so no ReferenceGrant is needed for backendRefs.<br>
             &nbsp;&nbsp;The Gateway in <code>istio-system</code> allows routes from all namespaces<br>
             &nbsp;&nbsp;via <code>allowedRoutes.namespaces.from: All</code>.<br><br>
@@ -805,9 +805,9 @@ Timeouts                               Yes — body visible</pre>
       </div>
       <div class="action-group">
         <div class="action-group-label">List all mesh CRs on this cluster</div>
-        <button class="btn primary" onclick="runAction('/api/mesh-resources', 'out-9a')">Show Mesh Resources</button>
+        <button class="btn primary" onclick="runAction('/api/mesh-resources', 'out-10a')">Show Mesh Resources</button>
       </div>
-      <pre class="output" id="out-9a"></pre>
+      <pre class="output" id="out-10a"></pre>
     </div>
   </div>
 

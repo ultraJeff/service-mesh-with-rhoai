@@ -39,7 +39,7 @@ End-to-end mTLS, customer-managed certificates, and traffic policy for Red Hat O
 - **Data plane**: ztunnel (Rust, per-node) handles L4 mTLS transparently — no sidecars
 - **Control plane**: istiod manages config via xDS, distributes SPIFFE certs
 - **Waypoint proxies**: Envoy (opt-in, per-namespace) for L7 policy — AuthZ, retries, timeouts
-- **SPIFFE**: Workload identity — `spiffe://cluster.local/ns/super-slim-demo/sa/default`
+- **SPIFFE**: Workload identity — `spiffe://cluster.local/ns/ossm-ai-models/sa/default`
 - **Zero-trust**: STRICT PeerAuthentication — every hop mutually authenticated
 
 ---

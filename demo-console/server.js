@@ -32,18 +32,18 @@ app.get('/api/sno-status', async (req, res) => {
 app.get('/api/health', async (req, res) => {
   const nodes = await run('oc get nodes --no-headers 2>/dev/null');
   const mesh = await run('oc get istio,istiocni,ztunnel -A --no-headers 2>/dev/null');
-  const pods = await run('oc get pods -n super-slim-demo --no-headers 2>/dev/null | grep -v Completed | grep -v Terminating');
+  const pods = await run('oc get pods -n ossm-ai-models --no-headers 2>/dev/null | grep -v Completed | grep -v Terminating');
   res.json({ nodes: nodes.output, mesh: mesh.output, pods: pods.output });
 });
 
 app.get('/api/timeout-policy/status', async (req, res) => {
-  const result = await run('oc get virtualservice httpbin-timeout -n super-slim-demo --no-headers 2>/dev/null');
+  const result = await run('oc get virtualservice httpbin-timeout -n ossm-ai-models --no-headers 2>/dev/null');
   const active = result.output.trim().length > 0 && result.exitCode === 0;
   res.json({ active, output: result.output || 'No timeout policy applied' });
 });
 
 app.get('/api/authz-policy/status', async (req, res) => {
-  const result = await run('oc get authorizationpolicy -n super-slim-demo --no-headers 2>/dev/null');
+  const result = await run('oc get authorizationpolicy -n ossm-ai-models --no-headers 2>/dev/null');
   const active = result.output.trim().length > 0 && result.exitCode === 0;
   res.json({ active, output: result.output || 'No AuthorizationPolicy applied' });
 });
@@ -56,14 +56,14 @@ app.get('/api/istio-crs', async (req, res) => {
 });
 
 app.get('/api/plain-http-check', async (req, res) => {
-  const result = await run("echo 'The model runtime listens on port 8080:'; echo; oc exec -n super-slim-demo deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E 'State|8080'; echo; echo 'ztunnel encrypts all traffic to and from this port transparently.'");
+  const result = await run("echo 'The model runtime listens on port 8080:'; echo; oc exec -n ossm-ai-models deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E 'State|8080'; echo; echo 'ztunnel encrypts all traffic to and from this port transparently.'");
   res.json(result);
 });
 
 app.get('/api/pod-containers', async (req, res) => {
   const result = await run(`echo 'Iris model pod containers:'
 echo ''
-oc get pods -n super-slim-demo -l app=isvc.iris-onnx-predictor -o jsonpath='{range .items[0].spec.containers[*]}{.name}{"\\n"}{end}' 2>/dev/null | sed 's/^/  /'
+oc get pods -n ossm-ai-models -l app=isvc.iris-onnx-predictor -o jsonpath='{range .items[0].spec.containers[*]}{.name}{"\\n"}{end}' 2>/dev/null | sed 's/^/  /'
 echo ''
 echo 'kserve-container  → ML model serving on :8080'
 echo 'kube-rbac-proxy   → RHOAI auth proxy, TLS on :8443 (enable-auth: true)'
@@ -135,13 +135,13 @@ echo '  15053  ztunnel DNS proxy'
 echo '   8080  app (only reachable via ztunnel, not directly)'
 echo ''
 echo 'Live from the pod:'
-oc exec -n super-slim-demo deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E "State|8080|1500"
+oc exec -n ossm-ai-models deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E "State|8080|1500"
 `);
   res.json(result);
 });
 
 app.get('/api/namespace-labels', async (req, res) => {
-  const result = await run(`echo 'Namespace: super-slim-demo'
+  const result = await run(`echo 'Namespace: ossm-ai-models'
 echo ''
 echo 'Mesh enrollment labels (this is all it takes):'
 echo ''
@@ -149,7 +149,7 @@ echo '  istio.io/dataplane-mode: ambient     ← enroll in the mesh'
 echo '  istio.io/use-waypoint: mesh-waypoint ← enable L7 policy'
 echo ''
 echo 'Live:'
-oc get ns super-slim-demo -o jsonpath='{.metadata.labels}' 2>/dev/null | python3 -c "
+oc get ns ossm-ai-models -o jsonpath='{.metadata.labels}' 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
 for k,v in sorted(d.items()):
@@ -160,12 +160,12 @@ for k,v in sorted(d.items()):
 });
 
 app.get('/api/peer-auth', async (req, res) => {
-  const result = await run('oc get peerauthentication -n super-slim-demo 2>/dev/null');
+  const result = await run('oc get peerauthentication -n ossm-ai-models 2>/dev/null');
   res.json(result);
 });
 
 app.get('/api/app-ports', async (req, res) => {
-  const result = await run('echo "=== App port (plain HTTP) ==="; oc exec -n super-slim-demo deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep 8080; echo "\\n=== Ztunnel ports (interception) ==="; oc exec -n super-slim-demo deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E "15006|15008|15001"');
+  const result = await run('echo "=== App port (plain HTTP) ==="; oc exec -n ossm-ai-models deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep 8080; echo "\\n=== Ztunnel ports (interception) ==="; oc exec -n ossm-ai-models deploy/iris-onnx-predictor -c kserve-container -- ss -tlnp 2>/dev/null | grep -E "15006|15008|15001"');
   res.json(result);
 });
 
@@ -265,10 +265,10 @@ echo ''
 echo '1. Pod starts in an ambient-enrolled namespace'
 echo '2. ztunnel detects the new pod (via istio-cni)'
 echo '3. ztunnel requests a cert from istiod:'
-echo '     "I need an identity for ns/super-slim-demo, sa/default"'
+echo '     "I need an identity for ns/ossm-ai-models, sa/default"'
 echo '4. istiod validates the request via K8s TokenReview API'
 echo '5. istiod constructs the SPIFFE URI from namespace + service account:'
-echo '     spiffe://cluster.local/ns/super-slim-demo/sa/default'
+echo '     spiffe://cluster.local/ns/ossm-ai-models/sa/default'
 echo '6. istiod signs an X.509 cert with that URI as the SAN (Subject Alternative Name)'
 echo '     using the intermediate CA from the cacerts secret'
 echo '7. ztunnel holds the cert in memory (app never sees it)'
@@ -283,9 +283,9 @@ echo 'access control works without tokens or passwords.'`);
 });
 
 app.get('/api/spiffe-cert-details', async (req, res) => {
-  const wpResult = await run("oc get pods -n super-slim-demo -l gateway.networking.k8s.io/gateway-name=mesh-waypoint -o jsonpath='{.items[0].metadata.name}' 2>/dev/null");
+  const wpResult = await run("oc get pods -n ossm-ai-models -l gateway.networking.k8s.io/gateway-name=mesh-waypoint -o jsonpath='{.items[0].metadata.name}' 2>/dev/null");
   const wp = wpResult.output.trim().replace(/'/g, '');
-  const certResult = await run(`oc exec -n super-slim-demo ${wp} -- pilot-agent request GET /certs 2>/dev/null`);
+  const certResult = await run(`oc exec -n ossm-ai-models ${wp} -- pilot-agent request GET /certs 2>/dev/null`);
   let certInfo = '';
   try {
     const d = JSON.parse(certResult.output);
@@ -336,9 +336,9 @@ echo 'service account. No configuration needed — it is automatic.'
 echo ''
 echo 'Workload identities on this cluster:'
 echo ''
-oc get pods -n super-slim-demo -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.metadata.name}{"\\t"}{.spec.serviceAccountName}{"\\n"}{end}' 2>/dev/null | while read POD SA; do
+oc get pods -n ossm-ai-models -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.metadata.name}{"\\t"}{.spec.serviceAccountName}{"\\n"}{end}' 2>/dev/null | while read POD SA; do
   echo "  $POD"
-  echo "    → spiffe://cluster.local/ns/super-slim-demo/sa/$SA"
+  echo "    → spiffe://cluster.local/ns/ossm-ai-models/sa/$SA"
   echo ""
 done
 echo 'Mesh gateway identity:'
@@ -364,7 +364,7 @@ app.get('/api/mesh-gateway', async (req, res) => {
 });
 
 app.get('/api/httproutes', async (req, res) => {
-  const result = await run('oc get httproute -n super-slim-demo 2>/dev/null; echo "\\n--- OCP Passthrough Routes ---"; oc get route -n istio-system 2>/dev/null | grep mesh-gateway');
+  const result = await run('oc get httproute -n ossm-ai-models 2>/dev/null; echo "\\n--- OCP Passthrough Routes ---"; oc get route -n istio-system 2>/dev/null | grep mesh-gateway');
   res.json(result);
 });
 
@@ -413,10 +413,10 @@ for line in sys.stdin:
 });
 
 app.post('/api/test-bypass', async (req, res) => {
-  const result = await run(`echo '$ curl -s http://iris-onnx-predictor.super-slim-demo.svc:80/v2/models/iris-onnx'
+  const result = await run(`echo '$ curl -s http://iris-onnx-predictor.ossm-ai-models.svc:80/v2/models/iris-onnx'
 echo '  (direct to service, no mesh gateway, no SPIFFE identity)'
 echo ''
-CODE=$(oc run bypass-test --rm -i --restart=Never -n default --image=curlimages/curl -- -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://iris-onnx-predictor.super-slim-demo.svc:80/v2/models/iris-onnx 2>/dev/null | grep -oE '[0-9]{3}' | tail -1)
+CODE=$(oc run bypass-test --rm -i --restart=Never -n default --image=curlimages/curl -- -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://iris-onnx-predictor.ossm-ai-models.svc:80/v2/models/iris-onnx 2>/dev/null | grep -oE '[0-9]{3}' | tail -1)
 if [ "$CODE" = "200" ]; then
   echo "Result: HTTP $CODE — ACCESS GRANTED (should not happen with STRICT mTLS)"
 else
@@ -435,7 +435,7 @@ app.post('/api/authz-policy/apply', async (req, res) => {
 kind: AuthorizationPolicy
 metadata:
   name: iris-allow-gateway-only
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
 spec:
   targetRefs:
     - kind: Gateway
@@ -447,13 +447,13 @@ spec:
         - source:
             principals:
               - "cluster.local/ns/istio-system/sa/mesh-gateway-istio"
-              - "cluster.local/ns/super-slim-demo/sa/mesh-waypoint"`;
+              - "cluster.local/ns/ossm-ai-models/sa/mesh-waypoint"`;
   const result = await run(`echo '${policy}' | oc apply -f - 2>&1`);
   res.json(result);
 });
 
 app.get('/api/authz-policy/explain', async (req, res) => {
-  const result = await run(`EXISTS=$(oc get authorizationpolicy iris-allow-gateway-only -n super-slim-demo --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  const result = await run(`EXISTS=$(oc get authorizationpolicy iris-allow-gateway-only -n ossm-ai-models --no-headers 2>/dev/null | wc -l | tr -d ' ')
 if [ "$EXISTS" = "0" ]; then
   echo 'No AuthorizationPolicy applied. All mesh identities can reach all services.'
 else
@@ -481,7 +481,7 @@ fi`);
 });
 
 app.post('/api/authz-policy/delete', async (req, res) => {
-  const result = await run('oc delete authorizationpolicy iris-allow-gateway-only -n super-slim-demo 2>&1');
+  const result = await run('oc delete authorizationpolicy iris-allow-gateway-only -n ossm-ai-models 2>&1');
   res.json(result);
 });
 
@@ -516,7 +516,7 @@ app.post('/api/test-pod-to-pod', async (req, res) => {
   const result = await run(`echo '$ kubectl exec test-client -- curl http://iris-onnx-mesh/v2/models/iris-onnx'
 echo '  (pod-to-pod inside the namespace, no gateway)'
 echo ''
-CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://iris-onnx-mesh.super-slim-demo.svc:80/v2/models/iris-onnx 2>/dev/null)
+CODE=$(oc exec -n ossm-ai-models deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 http://iris-onnx-mesh.ossm-ai-models.svc:80/v2/models/iris-onnx 2>/dev/null)
 if [ "$CODE" = "200" ]; then
   echo "Result: HTTP $CODE — access granted"
 elif [ "$CODE" = "403" ]; then
@@ -577,7 +577,7 @@ echo '  (httpbin fails ~50% of the time — simulating flaky service)'
 echo ''
 PASS=0; FAIL=0
 for i in $(seq 1 10); do
-  CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://httpbin.super-slim-demo.svc/unstable 2>/dev/null)
+  CODE=$(oc exec -n ossm-ai-models deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://httpbin.ossm-ai-models.svc/unstable 2>/dev/null)
   if [ "$CODE" = "200" ]; then PASS=$((PASS+1)); printf "."; else FAIL=$((FAIL+1)); printf "X"; fi
 done
 echo ""
@@ -597,14 +597,14 @@ apiVersion: networking.istio.io/v1
 kind: VirtualService
 metadata:
   name: httpbin-timeout
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
 spec:
   hosts:
-    - httpbin.super-slim-demo.svc.cluster.local
+    - httpbin.ossm-ai-models.svc.cluster.local
   http:
     - route:
         - destination:
-            host: httpbin.super-slim-demo.svc.cluster.local
+            host: httpbin.ossm-ai-models.svc.cluster.local
             port:
               number: 80
       retries:
@@ -617,12 +617,12 @@ ENDOFPOLICY`);
 });
 
 app.post('/api/timeout-policy/delete', async (req, res) => {
-  const result = await run('oc delete virtualservice httpbin-timeout -n super-slim-demo 2>&1');
+  const result = await run('oc delete virtualservice httpbin-timeout -n ossm-ai-models 2>&1');
   res.json(result);
 });
 
 app.get('/api/timeout-policy/explain', async (req, res) => {
-  const result = await run(`EXISTS=$(oc get virtualservice httpbin-timeout -n super-slim-demo --no-headers 2>/dev/null | wc -l | tr -d ' ')
+  const result = await run(`EXISTS=$(oc get virtualservice httpbin-timeout -n ossm-ai-models --no-headers 2>/dev/null | wc -l | tr -d ' ')
 if [ "$EXISTS" = "0" ]; then
   echo 'No timeout policy applied.'
   echo 'Requests wait as long as the server takes to respond.'
@@ -640,11 +640,11 @@ fi`);
 });
 
 app.post('/api/test-timeout', async (req, res) => {
-  const result = await run(`echo '$ curl http://httpbin.super-slim-demo.svc/delay/10'
+  const result = await run(`echo '$ curl http://httpbin.ossm-ai-models.svc/delay/10'
 echo '  (httpbin delays response by 10 seconds)'
 echo ''
 START=$(date +%s)
-CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 15 http://httpbin.super-slim-demo.svc/delay/10 2>/dev/null)
+CODE=$(oc exec -n ossm-ai-models deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 15 http://httpbin.ossm-ai-models.svc/delay/10 2>/dev/null)
 END=$(date +%s)
 ELAPSED=$((END - START))
 echo "Result: HTTP $CODE (took ~\${ELAPSED}s)"
@@ -699,7 +699,7 @@ echo ''
 oc --context rhoai exec -n istio-system deploy/istiod -- pilot-discovery request GET /debug/endpointShardz 2>/dev/null | python3 -c "
 import json, sys
 d = json.load(sys.stdin)
-interesting = ['demo-app', 'istio-system', 'super-slim-demo']
+interesting = ['demo-app', 'istio-system', 'ossm-ai-models']
 for svc, data in d.items():
     for ns, sharddata in data.items():
         shards = sharddata.get('Shards', {})
@@ -783,12 +783,12 @@ echo ''
 echo 'httpbin /unstable (pod-to-pod via waypoint):'
 PASS2=0; FAIL2=0
 for i in $(seq 1 5); do
-  CODE=$(oc exec -n super-slim-demo deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://httpbin.super-slim-demo.svc/unstable 2>/dev/null)
+  CODE=$(oc exec -n ossm-ai-models deploy/test-client -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://httpbin.ossm-ai-models.svc/unstable 2>/dev/null)
   if [ "$CODE" = "200" ]; then PASS2=$((PASS2+1)); printf "."; else FAIL2=$((FAIL2+1)); printf "X"; fi
 done
 echo "  $PASS2 ok, $FAIL2 errors (visible in Kiali as error rate)"
 echo ''
-echo 'Check Kiali graph now — select super-slim-demo namespace.'
+echo 'Check Kiali graph now — select ossm-ai-models namespace.'
 echo 'You should see: mesh-gateway → iris-onnx-mesh, test-client → httpbin'`);
   res.json({ output: result.output, exitCode: 0 });
 });

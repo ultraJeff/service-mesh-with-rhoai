@@ -4,7 +4,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: test-client
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
 spec:
   replicas: 1
   selector:

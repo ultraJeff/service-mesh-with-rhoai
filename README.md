@@ -37,7 +37,7 @@ The OSSM v3 ambient mesh (deployed by the [ossm-3-demo](https://github.com/ultra
 
 - OSSM v3.3.3 deployed via ArgoCD (ossm-3-demo integrated overlay)
 - Ambient mesh healthy: istiod, istio-cni, ztunnel running on all nodes
-- `super-slim-demo` namespace enrolled in ambient mesh
+- `ossm-ai-models` namespace enrolled in ambient mesh
 - Waypoint proxy deployed for L7 policy
 - RHOAI gateway coexists (can't be suppressed)
 
@@ -89,7 +89,7 @@ oc apply -f manifests/istio/waypoint.yaml
 oc apply -f manifests/istio/peer-authentication.yaml
 
 # Restart workloads to pick up CNI rules
-oc rollout restart deployment -n super-slim-demo
+oc rollout restart deployment -n ossm-ai-models
 
 # Deploy models (if not already running)
 oc apply -f manifests/rhoai/dsc.yaml

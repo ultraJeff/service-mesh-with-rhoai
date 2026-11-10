@@ -2,7 +2,7 @@ apiVersion: serving.kserve.io/v1alpha1
 kind: ServingRuntime
 metadata:
   name: mlserver-runtime
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
   annotations:
     openshift.io/display-name: MLServer ServingRuntime for KServe
   labels:

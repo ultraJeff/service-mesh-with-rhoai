@@ -2,7 +2,7 @@ apiVersion: serving.kserve.io/v1alpha1
 kind: ServingRuntime
 metadata:
   name: vllm-cpu-runtime
-  namespace: super-slim-demo
+  namespace: ossm-ai-models
   annotations:
     opendatahub.io/runtime-version: v0.18.0
     openshift.io/display-name: vLLM CPU ServingRuntime for KServe (x86_64)

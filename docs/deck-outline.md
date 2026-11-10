@@ -30,7 +30,7 @@ End-to-end mTLS, customer-managed certificates, and traffic policy for Red Hat O
 - **Data plane**: Transparent proxies (ztunnel in ambient mode) intercept all pod traffic
 - **Control plane**: istiod manages configuration, distributes certs, enforces policy
 - **mTLS**: Every connection is mutually authenticated — both sides prove identity
-- **SPIFFE**: Workload identity standard — `spiffe://cluster.local/ns/super-slim-demo/sa/default`
+- **SPIFFE**: Workload identity standard — `spiffe://cluster.local/ns/ossm-ai-models/sa/default`
 - **Zero-trust**: No implicit trust based on network location — every hop is verified
 
 *Speaker notes: Traditional network security (firewalls, network segmentation) doesn't work in Kubernetes — pods move, IPs change. The mesh provides identity-based security that follows the workload.*

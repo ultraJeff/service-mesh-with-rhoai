@@ -34,7 +34,7 @@ The demo's 9-step flow (pod starts -> ztunnel requests -> istiod validates via T
 
 - **TokenReview API**: Confirmed. Istiod uses the `KubeJWTAuthenticator` which calls the Kubernetes TokenReview API to validate the service account JWT token carried with the CSR. ([Source](https://oneuptime.com/blog/post/2026-02-24-how-to-understand-istio-certificate-provisioning-workflow/view))
 
-- **SAN is the SPIFFE identity**: Confirmed. The SPIFFE URI (e.g., `spiffe://cluster.local/ns/super-slim-demo/sa/default`) is placed in the Subject Alternative Name (SAN) field of the X.509 certificate. Istio puts identity in the SAN, not the Subject. ([Istio docs: Security](https://istio.io/latest/docs/concepts/security/))
+- **SAN is the SPIFFE identity**: Confirmed. The SPIFFE URI (e.g., `spiffe://cluster.local/ns/ossm-ai-models/sa/default`) is placed in the Subject Alternative Name (SAN) field of the X.509 certificate. Istio puts identity in the SAN, not the Subject. ([Istio docs: Security](https://istio.io/latest/docs/concepts/security/))
 
 - **24h rotation**: Confirmed. Default workload certificate lifetime is 24 hours, and ztunnel handles rotation automatically. ([Istio docs: Ambient data plane](https://istio.io/latest/docs/ambient/architecture/data-plane/))
 
