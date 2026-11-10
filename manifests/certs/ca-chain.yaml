@@ -25,7 +25,7 @@ spec:
   commonName: "Mesh Root CA"
   subject:
     organizations:
-      - demo.mesh
+      - tallgeese.ultra.lab # matches the live CA; changing it reissues the CA (see README)
   secretName: mesh-root-ca-secret
   privateKey:
     algorithm: ECDSA
@@ -55,7 +55,7 @@ spec:
   commonName: "Mesh Intermediate CA"
   subject:
     organizations:
-      - demo.mesh
+      - tallgeese.ultra.lab # matches the live CA; changing it reissues the CA (see README)
   secretName: mesh-intermediate-ca-secret
   privateKey:
     algorithm: ECDSA

@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Mesh CA chain and the AI models gateway certificate.
+# Deployed by the ai-models-gateway-certs ArgoCD Application in
+# openshift-bootstrap-gitops. The gateway that serves mesh-gateway-tls
+# lives in ossm-3-demo (resources/rhoai/gateway).
+resources:
+- ca-chain.yaml
+- gateway-tls-cert.yaml

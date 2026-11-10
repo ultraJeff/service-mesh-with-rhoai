@@ -75,6 +75,20 @@ Keep the two in step:
 - If you rename or move the Certificate or its secret, update the Gateway and the ReferenceGrant in ossm-3-demo.
 - Don't copy `mesh-gateway-tls` into `istio-ingress`. cert-manager only renews the secret it owns. A copy made this way expired in August 2026.
 
+ArgoCD manages both halves from [openshift-bootstrap-gitops](https://github.com/ultraJeff/openshift-bootstrap-gitops):
+
+- The `ai-models-gateway-certs` app deploys `manifests/certs/` from this repo.
+- The `ai-models-gateway` app deploys `resources/rhoai/gateway/` from ossm-3-demo.
+
+The rest of `manifests/` is not synced by ArgoCD. Parts of it overlap with the `service-mesh` app (Istio, IstioCNI, ZTunnel, Kiali, the operator Subscriptions), so don't point an app at the whole directory.
+
+### The CA chain is also Istio's mesh CA
+
+`istio-system/cacerts` is built from `mesh-intermediate-ca-secret` by `scripts/create-istio-cacerts.sh`, so istiod signs every workload certificate with this intermediate CA. Two consequences:
+
+- **Changing the CA Certificates reissues the CA.** That includes their `subject.organizations`. Plan it as a CA rotation: rerun the script, restart istiod and ztunnel, and reissue the gateway cert. Don't change the CA in a routine sync.
+- **`cacerts` is a copy, and it will not follow a renewal.** The intermediate CA is valid until 2031, and cert-manager renews it a year early, in 2030. When that happens, rerun `create-istio-cacerts.sh`, or the mesh keeps signing with the old CA.
+
 ## What's Here
 
 ```
